@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" version="2.0">
+  <channel>
+    <title>AniSuKit_ES</title>
+    <link>https://andrezoepaiva-commits.github.io/caxinguele-audiobooks</link>
+    <description>Audiobook: AniSuKit_ES - Projeto Caxinguele</description>
+    <language>pt-BR</language>
+    <itunes:author>Projeto Caxinguele</itunes:author>
+    <itunes:owner>
+      <itunes:name>Projeto Caxinguele</itunes:name>
+      <itunes:email>andrefmdepaiva@gmail.com</itunes:email>
+    </itunes:owner>
+    <itunes:explicit>false</itunes:explicit>
+    <itunes:image href="https://andrezoepaiva-commits.github.io/caxinguele-audiobooks/capa_podcast.jpg" />
+    <image>
+      <url>https://andrezoepaiva-commits.github.io/caxinguele-audiobooks/capa_podcast.jpg</url>
+      <title>AniSuKit_ES</title>
+      <link>https://andrezoepaiva-commits.github.io/caxinguele-audiobooks</link>
+    </image>
+    <itunes:category text="Books" />
+    <item>
+      <title>01. caminata - Parte 1</title>
+      <description>Capitulo 1 de AniSuKit_ES</description>
+      <guid>AniSuKit_ES-cap01</guid>
+      <pubDate>Tue, 10 Feb 2026 16:16:22 +0000</pubDate>
+      <itunes:episode>1</itunes:episode>
+      <itunes:episodeType>full</itunes:episodeType>
+      <enclosure url="https://drive.google.com/uc?export=download&amp;id=1S1ZXkY3T6uZ_7hGD6Q0hMJwCqbD7NmN_" type="audio/mpeg" length="0" />
+    </item>
+    <item>
+      <title>02. caminata - Parte 2</title>
+      <description>Capitulo 2 de AniSuKit_ES</description>
+      <guid>AniSuKit_ES-cap02</guid>
+      <pubDate>Tue, 10 Feb 2026 16:16:22 +0000</pubDate>
+      <itunes:episode>2</itunes:episode>
+      <itunes:episodeType>full</itunes:episodeType>
+      <enclosure url="https://drive.google.com/uc?export=download&amp;id=14HU0G9i5LAu9YVIUxZK_K7pGIbtOdv3Z" type="audio/mpeg" length="0" />
+    </item>
+    <item>
+      <title>03. caminata - Parte 4</title>
+      <description>Capitulo 3 de AniSuKit_ES</description>
+      <guid>AniSuKit_ES-cap03</guid>
+      <pubDate>Tue, 10 Feb 2026 16:16:22 +0000</pubDate>
+      <itunes:episode>3</itunes:episode>
+      <itunes:episodeType>full</itunes:episodeType>
+      <enclosure url="https://drive.google.com/uc?export=download&amp;id=1yjcizIw5ST7wJlAWnXARKmGQiNvcqHQW" type="audio/mpeg" length="0" />
+    </item>
+    <item>
+      <title>04. caminata - Parte 5</title>
+      <description>Capitulo 4 de AniSuKit_ES</description>
+      <guid>AniSuKit_ES-cap04</guid>
+      <pubDate>Tue, 10 Feb 2026 16:16:22 +0000</pubDate>
+      <itunes:episode>4</itunes:episode>
+      <itunes:episodeType>full</itunes:episodeType>
+      <enclosure url="https://drive.google.com/uc?export=download&amp;id=15jXkXoXi7pNWVDimAdHCOG5JENHJZ0Cd" type="audio/mpeg" length="0" />
+    </item>
+    <item>
+      <title>05. caminata - Parte 6</title>
+      <description>Capitulo 5 de AniSuKit_ES</description>
+      <guid>AniSuKit_ES-cap05</guid>
+      <pubDate>Tue, 10 Feb 2026 16:16:22 +0000</pubDate>
+      <itunes:episode>5</itunes:episode>
+      <itunes:episodeType>full</itunes:episodeType>
+      <enclosure url="https://drive.google.com/uc?export=download&amp;id=15Hr3nDcu114mFMzQR54XBC4oN0Juf3zF" type="audio/mpeg" length="0" />
+    </item>
+    <item>
+      <title>06. caminata - Parte 7</title>
+      <description>Capitulo 6 de AniSuKit_ES</description>
+      <guid>AniSuKit_ES-cap06</guid>
+      <pubDate>Tue, 10 Feb 2026 16:16:22 +0000</pubDate>
+      <itunes:episode>6</itunes:episode>
+      <itunes:episodeType>full</itunes:episodeType>
+      <enclosure url="https://drive.google.com/uc?export=download&amp;id=1dDeBnNxsmRtpDzalOiLKxXVpJ0BMItBJ" type="audio/mpeg" length="0" />
+    </item>
+    <item>
+      <title>07. caminata - Parte 8</title>
+      <description>Capitulo 7 de AniSuKit_ES</description>
+      <guid>AniSuKit_ES-cap07</guid>
+      <pubDate>Tue, 10 Feb 2026 16:16:22 +0000</pubDate>
+      <itunes:episode>7</itunes:episode>
+      <itunes:episodeType>full</itunes:episodeType>
+      <enclosure url="https://drive.google.com/uc?export=download&amp;id=1ZwkuiNrP2Gxfn3O4WmnE5V7EedTXDa6Q" type="audio/mpeg" length="0" />
+    </item>
+    <item>
+      <title>08. caminata - Parte 9</title>
+      <description>Capitulo 8 de AniSuKit_ES</description>
+      <guid>AniSuKit_ES-cap08</guid>
+      <pubDate>Tue, 10 Feb 2026 16:16:22 +0000</pubDate>
+      <itunes:episode>8</itunes:episode>
+      <itunes:episodeType>full</itunes:episodeType>
+      <enclosure url="https://drive.google.com/uc?export=download&amp;id=1Bgu7ZdoD7OohCwpqsJqFpiGmliopcV1n" type="audio/mpeg" length="0" />
+    </item>
+    <item>
+      <title>09. caminata - Parte 10</title>
+      <description>Capitulo 9 de AniSuKit_ES</description>
+      <guid>AniSuKit_ES-cap09</guid>
+      <pubDate>Tue, 10 Feb 2026 16:16:22 +0000</pubDate>
+      <itunes:episode>9</itunes:episode>
+      <itunes:episodeType>full</itunes:episodeType>
+      <enclosure url="https://drive.google.com/uc?export=download&amp;id=1VJAjiQ4gDWbwRcxWR4xSxqftJmdl4fDZ" type="audio/mpeg" length="0" />
+    </item>
+    <item>
+      <title>10. caminata - Parte 11</title>
+      <description>Capitulo 10 de AniSuKit_ES</description>
+      <guid>AniSuKit_ES-cap10</guid>
+      <pubDate>Tue, 10 Feb 2026 16:16:22 +0000</pubDate>
+      <itunes:episode>10</itunes:episode>
+      <itunes:episodeType>full</itunes:episodeType>
+      <enclosure url="https://drive.google.com/uc?export=download&amp;id=13GKhfCbrK0rjeQH6rWBpStH_AcwxXlVY" type="audio/mpeg" length="0" />
+    </item>
+    <item>
+      <title>11. caminata - Parte 12</title>
+      <description>Capitulo 11 de AniSuKit_ES</description>
+      <guid>AniSuKit_ES-cap11</guid>
+      <pubDate>Tue, 10 Feb 2026 16:16:22 +0000</pubDate>
+      <itunes:episode>11</itunes:episode>
+      <itunes:episodeType>full</itunes:episodeType>
+      <enclosure url="https://drive.google.com/uc?export=download&amp;id=1KyLjOD6GuPNFVh17ju8dAb23p2DX2fhO" type="audio/mpeg" length="0" />
+    </item>
+  </channel>
+</rss>
