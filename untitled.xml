@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" version="2.0">
+  <channel>
+    <title>untitled</title>
+    <link>https://andrezoepaiva-commits.github.io/caxinguele-audiobooks</link>
+    <description>Audiobook: untitled - Projeto Caxinguele</description>
+    <language>pt-BR</language>
+    <itunes:author>Projeto Caxinguele</itunes:author>
+    <itunes:owner>
+      <itunes:name>Projeto Caxinguele</itunes:name>
+      <itunes:email>andrezoepaiva@gmail.com</itunes:email>
+    </itunes:owner>
+    <itunes:explicit>false</itunes:explicit>
+    <itunes:image href="https://andrezoepaiva-commits.github.io/caxinguele-audiobooks/capa_podcast.jpg" />
+    <image>
+      <url>https://andrezoepaiva-commits.github.io/caxinguele-audiobooks/capa_podcast.jpg</url>
+      <title>untitled</title>
+      <link>https://andrezoepaiva-commits.github.io/caxinguele-audiobooks</link>
+    </image>
+    <itunes:category text="Books" />
+    <item>
+      <title>01. Parte 1</title>
+      <description>Capitulo 1 de untitled</description>
+      <guid>untitled-cap01</guid>
+      <pubDate>Tue, 10 Feb 2026 17:35:19 +0000</pubDate>
+      <itunes:episode>1</itunes:episode>
+      <itunes:episodeType>full</itunes:episodeType>
+      <enclosure url="https://drive.google.com/uc?export=download&amp;id=17eqSz880rU63Cf60q5nN8dHF0a5RjP4t" type="audio/mpeg" length="0" />
+    </item>
+  </channel>
+</rss>
