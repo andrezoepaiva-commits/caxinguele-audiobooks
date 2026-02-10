@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+<rss xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:content="http://purl.org/rss/1.0/modules/content/">
   <channel>
     <title>Animated Storytelling - Liz Blazer</title>
     <link>https://andrezoepaiva-commits.github.io/caxinguele-audiobooks</link>
@@ -10,12 +10,19 @@
       <itunes:name>Projeto Caxinguele</itunes:name>
       <itunes:email>andrefmdepaiva@gmail.com</itunes:email>
     </itunes:owner>
+    <itunes:explicit>false</itunes:explicit>
+    <itunes:image href="https://andrezoepaiva-commits.github.io/caxinguele-audiobooks/capa_podcast.jpg" />
+    <image>
+      <url>https://andrezoepaiva-commits.github.io/caxinguele-audiobooks/capa_podcast.jpg</url>
+      <title>Animated Storytelling - Liz Blazer</title>
+      <link>https://andrezoepaiva-commits.github.io/caxinguele-audiobooks</link>
+    </image>
     <itunes:category text="Books" />
     <item>
       <title>01. Parte 1</title>
       <description>Capitulo 1 de Animated Storytelling - Liz Blazer</description>
       <guid>Animated Storytelling - Liz Blazer-cap01</guid>
-      <pubDate>Tue, 10 Feb 2026 14:58:17 +0000</pubDate>
+      <pubDate>Tue, 10 Feb 2026 15:09:04 +0000</pubDate>
       <itunes:episode>1</itunes:episode>
       <itunes:episodeType>full</itunes:episodeType>
       <enclosure url="https://drive.google.com/uc?export=download&amp;id=1nAza8X0wna2PBjDm7CJN28NwfnOyAOIi" type="audio/mpeg" length="0" />
@@ -24,7 +31,7 @@
       <title>02. Parte 2</title>
       <description>Capitulo 2 de Animated Storytelling - Liz Blazer</description>
       <guid>Animated Storytelling - Liz Blazer-cap02</guid>
-      <pubDate>Tue, 10 Feb 2026 14:58:17 +0000</pubDate>
+      <pubDate>Tue, 10 Feb 2026 15:09:04 +0000</pubDate>
       <itunes:episode>2</itunes:episode>
       <itunes:episodeType>full</itunes:episodeType>
       <enclosure url="https://drive.google.com/uc?export=download&amp;id=14DHlQiRUMTUsGZr7fg2Yi7vHzL_matvY" type="audio/mpeg" length="0" />
@@ -33,7 +40,7 @@
       <title>03. - Cap 05 - 6. Comece a construir</title>
       <description>Capitulo 3 de Animated Storytelling - Liz Blazer</description>
       <guid>Animated Storytelling - Liz Blazer-cap03</guid>
-      <pubDate>Tue, 10 Feb 2026 14:58:17 +0000</pubDate>
+      <pubDate>Tue, 10 Feb 2026 15:09:04 +0000</pubDate>
       <itunes:episode>3</itunes:episode>
       <itunes:episodeType>full</itunes:episodeType>
       <enclosure url="https://drive.google.com/uc?export=download&amp;id=1j8uM5lQyGKrRseSVIuAo0GCZodpeyotH" type="audio/mpeg" length="0" />
@@ -42,7 +49,7 @@
       <title>04. Parte 1</title>
       <description>Capitulo 4 de Animated Storytelling - Liz Blazer</description>
       <guid>Animated Storytelling - Liz Blazer-cap04</guid>
-      <pubDate>Tue, 10 Feb 2026 14:58:17 +0000</pubDate>
+      <pubDate>Tue, 10 Feb 2026 15:09:04 +0000</pubDate>
       <itunes:episode>4</itunes:episode>
       <itunes:episodeType>full</itunes:episodeType>
       <enclosure url="https://drive.google.com/uc?export=download&amp;id=1X_IBKE05t8SHR5T1XI6tyUH6JXlRc62j" type="audio/mpeg" length="0" />
@@ -51,7 +58,7 @@
       <title>05. Parte 2</title>
       <description>Capitulo 5 de Animated Storytelling - Liz Blazer</description>
       <guid>Animated Storytelling - Liz Blazer-cap05</guid>
-      <pubDate>Tue, 10 Feb 2026 14:58:17 +0000</pubDate>
+      <pubDate>Tue, 10 Feb 2026 15:09:04 +0000</pubDate>
       <itunes:episode>5</itunes:episode>
       <itunes:episodeType>full</itunes:episodeType>
       <enclosure url="https://drive.google.com/uc?export=download&amp;id=1RMfy0pjs0brssArC2R2Bc40ibDwwIRV7" type="audio/mpeg" length="0" />
@@ -60,7 +67,7 @@
       <title>06. Parte 1</title>
       <description>Capitulo 6 de Animated Storytelling - Liz Blazer</description>
       <guid>Animated Storytelling - Liz Blazer-cap06</guid>
-      <pubDate>Tue, 10 Feb 2026 14:58:17 +0000</pubDate>
+      <pubDate>Tue, 10 Feb 2026 15:09:04 +0000</pubDate>
       <itunes:episode>6</itunes:episode>
       <itunes:episodeType>full</itunes:episodeType>
       <enclosure url="https://drive.google.com/uc?export=download&amp;id=1k8WeKu_7DgdTTJN8LjG7lNaJvOKoB5te" type="audio/mpeg" length="0" />
@@ -69,7 +76,7 @@
       <title>07. Parte 2</title>
       <description>Capitulo 7 de Animated Storytelling - Liz Blazer</description>
       <guid>Animated Storytelling - Liz Blazer-cap07</guid>
-      <pubDate>Tue, 10 Feb 2026 14:58:17 +0000</pubDate>
+      <pubDate>Tue, 10 Feb 2026 15:09:04 +0000</pubDate>
       <itunes:episode>7</itunes:episode>
       <itunes:episodeType>full</itunes:episodeType>
       <enclosure url="https://drive.google.com/uc?export=download&amp;id=1QGgQN8vmurpvCMC5qOyEtmh9GrIIzxXj" type="audio/mpeg" length="0" />
@@ -78,7 +85,7 @@
       <title>08. - Cap 11 - 7. Tempo use um cronometro</title>
       <description>Capitulo 8 de Animated Storytelling - Liz Blazer</description>
       <guid>Animated Storytelling - Liz Blazer-cap08</guid>
-      <pubDate>Tue, 10 Feb 2026 14:58:17 +0000</pubDate>
+      <pubDate>Tue, 10 Feb 2026 15:09:04 +0000</pubDate>
       <itunes:episode>8</itunes:episode>
       <itunes:episodeType>full</itunes:episodeType>
       <enclosure url="https://drive.google.com/uc?export=download&amp;id=1G6V07BV3EqnJWHPISnF4aFg11YB4nSN7" type="audio/mpeg" length="0" />
@@ -87,7 +94,7 @@
       <title>09. - Cap 12 - 4. Sentido de cor</title>
       <description>Capitulo 9 de Animated Storytelling - Liz Blazer</description>
       <guid>Animated Storytelling - Liz Blazer-cap09</guid>
-      <pubDate>Tue, 10 Feb 2026 14:58:17 +0000</pubDate>
+      <pubDate>Tue, 10 Feb 2026 15:09:04 +0000</pubDate>
       <itunes:episode>9</itunes:episode>
       <itunes:episodeType>full</itunes:episodeType>
       <enclosure url="https://drive.google.com/uc?export=download&amp;id=1PAynda7ljlhhhRmL6WIQJZJR9FQCVsPh" type="audio/mpeg" length="0" />
@@ -96,7 +103,7 @@
       <title>10. - Cap 13 - 5. Ciencia Estranha</title>
       <description>Capitulo 10 de Animated Storytelling - Liz Blazer</description>
       <guid>Animated Storytelling - Liz Blazer-cap10</guid>
-      <pubDate>Tue, 10 Feb 2026 14:58:17 +0000</pubDate>
+      <pubDate>Tue, 10 Feb 2026 15:09:04 +0000</pubDate>
       <itunes:episode>10</itunes:episode>
       <itunes:episodeType>full</itunes:episodeType>
       <enclosure url="https://drive.google.com/uc?export=download&amp;id=1p_Uhn_umMiqTwBmsTkC4aIPsE5yredq1" type="audio/mpeg" length="0" />
@@ -105,7 +112,7 @@
       <title>11. - Cap 17 - 7. Experimente movimento</title>
       <description>Capitulo 11 de Animated Storytelling - Liz Blazer</description>
       <guid>Animated Storytelling - Liz Blazer-cap11</guid>
-      <pubDate>Tue, 10 Feb 2026 14:58:17 +0000</pubDate>
+      <pubDate>Tue, 10 Feb 2026 15:09:04 +0000</pubDate>
       <itunes:episode>11</itunes:episode>
       <itunes:episodeType>full</itunes:episodeType>
       <enclosure url="https://drive.google.com/uc?export=download&amp;id=1rQvMTXS0B2lVgv1npjz9unIEu1MYZar9" type="audio/mpeg" length="0" />
@@ -114,7 +121,7 @@
       <title>12. Parte 1</title>
       <description>Capitulo 12 de Animated Storytelling - Liz Blazer</description>
       <guid>Animated Storytelling - Liz Blazer-cap12</guid>
-      <pubDate>Tue, 10 Feb 2026 14:58:17 +0000</pubDate>
+      <pubDate>Tue, 10 Feb 2026 15:09:04 +0000</pubDate>
       <itunes:episode>12</itunes:episode>
       <itunes:episodeType>full</itunes:episodeType>
       <enclosure url="https://drive.google.com/uc?export=download&amp;id=1ewAcLJHvUl2KDg1BhuSJBdrjq7rUNUvM" type="audio/mpeg" length="0" />
@@ -123,7 +130,7 @@
       <title>13. Parte 2</title>
       <description>Capitulo 13 de Animated Storytelling - Liz Blazer</description>
       <guid>Animated Storytelling - Liz Blazer-cap13</guid>
-      <pubDate>Tue, 10 Feb 2026 14:58:17 +0000</pubDate>
+      <pubDate>Tue, 10 Feb 2026 15:09:04 +0000</pubDate>
       <itunes:episode>13</itunes:episode>
       <itunes:episodeType>full</itunes:episodeType>
       <enclosure url="https://drive.google.com/uc?export=download&amp;id=1aoZcoy798ivDMZrOVlr2Dy-soKKOIrgY" type="audio/mpeg" length="0" />
@@ -132,7 +139,7 @@
       <title>14. - Cap 22 - 4. Musica como efeitos sonoros</title>
       <description>Capitulo 14 de Animated Storytelling - Liz Blazer</description>
       <guid>Animated Storytelling - Liz Blazer-cap14</guid>
-      <pubDate>Tue, 10 Feb 2026 14:58:17 +0000</pubDate>
+      <pubDate>Tue, 10 Feb 2026 15:09:04 +0000</pubDate>
       <itunes:episode>14</itunes:episode>
       <itunes:episodeType>full</itunes:episodeType>
       <enclosure url="https://drive.google.com/uc?export=download&amp;id=18XtB7GSQ7AZUflw2cTGipc8LFt2FGxZ5" type="audio/mpeg" length="0" />
@@ -141,7 +148,7 @@
       <title>15. - Cap 23 - 7. Projete o Pais das Maravilhas</title>
       <description>Capitulo 15 de Animated Storytelling - Liz Blazer</description>
       <guid>Animated Storytelling - Liz Blazer-cap15</guid>
-      <pubDate>Tue, 10 Feb 2026 14:58:17 +0000</pubDate>
+      <pubDate>Tue, 10 Feb 2026 15:09:04 +0000</pubDate>
       <itunes:episode>15</itunes:episode>
       <itunes:episodeType>full</itunes:episodeType>
       <enclosure url="https://drive.google.com/uc?export=download&amp;id=13MzZEt5xMr41SXQPwQ-3xDjh1lH3_gfO" type="audio/mpeg" length="0" />
@@ -150,7 +157,7 @@
       <title>16. Parte 1</title>
       <description>Capitulo 16 de Animated Storytelling - Liz Blazer</description>
       <guid>Animated Storytelling - Liz Blazer-cap16</guid>
-      <pubDate>Tue, 10 Feb 2026 14:58:17 +0000</pubDate>
+      <pubDate>Tue, 10 Feb 2026 15:09:04 +0000</pubDate>
       <itunes:episode>16</itunes:episode>
       <itunes:episodeType>full</itunes:episodeType>
       <enclosure url="https://drive.google.com/uc?export=download&amp;id=1TBXQ6YiAIaHIHcg8cJPVbaldbdsOd4nO" type="audio/mpeg" length="0" />
@@ -159,7 +166,7 @@
       <title>17. Parte 2</title>
       <description>Capitulo 17 de Animated Storytelling - Liz Blazer</description>
       <guid>Animated Storytelling - Liz Blazer-cap17</guid>
-      <pubDate>Tue, 10 Feb 2026 14:58:17 +0000</pubDate>
+      <pubDate>Tue, 10 Feb 2026 15:09:04 +0000</pubDate>
       <itunes:episode>17</itunes:episode>
       <itunes:episodeType>full</itunes:episodeType>
       <enclosure url="https://drive.google.com/uc?export=download&amp;id=15zUDTYcuwm76-NMN3GShKh11sEeVdXbX" type="audio/mpeg" length="0" />
@@ -168,7 +175,7 @@
       <title>18. - Cap 26 - 1. Considere o formato</title>
       <description>Capitulo 18 de Animated Storytelling - Liz Blazer</description>
       <guid>Animated Storytelling - Liz Blazer-cap18</guid>
-      <pubDate>Tue, 10 Feb 2026 14:58:17 +0000</pubDate>
+      <pubDate>Tue, 10 Feb 2026 15:09:04 +0000</pubDate>
       <itunes:episode>18</itunes:episode>
       <itunes:episodeType>full</itunes:episodeType>
       <enclosure url="https://drive.google.com/uc?export=download&amp;id=1Yy43j5Z5XKogUCP52f3erXZoYBCUq7kh" type="audio/mpeg" length="0" />
@@ -177,7 +184,7 @@
       <title>19. - Cap 27 - 9. Animar</title>
       <description>Capitulo 19 de Animated Storytelling - Liz Blazer</description>
       <guid>Animated Storytelling - Liz Blazer-cap19</guid>
-      <pubDate>Tue, 10 Feb 2026 14:58:17 +0000</pubDate>
+      <pubDate>Tue, 10 Feb 2026 15:09:04 +0000</pubDate>
       <itunes:episode>19</itunes:episode>
       <itunes:episodeType>full</itunes:episodeType>
       <enclosure url="https://drive.google.com/uc?export=download&amp;id=1zJoWnqXdx2OJH-G4k0yezif1pDQ_-sad" type="audio/mpeg" length="0" />
@@ -186,7 +193,7 @@
       <title>20. Parte 1</title>
       <description>Capitulo 20 de Animated Storytelling - Liz Blazer</description>
       <guid>Animated Storytelling - Liz Blazer-cap20</guid>
-      <pubDate>Tue, 10 Feb 2026 14:58:17 +0000</pubDate>
+      <pubDate>Tue, 10 Feb 2026 15:09:04 +0000</pubDate>
       <itunes:episode>20</itunes:episode>
       <itunes:episodeType>full</itunes:episodeType>
       <enclosure url="https://drive.google.com/uc?export=download&amp;id=1hIA8yyj2uyl-_4vQtzC7ZHWpASziTd8g" type="audio/mpeg" length="0" />
@@ -195,7 +202,7 @@
       <title>21. Parte 2</title>
       <description>Capitulo 21 de Animated Storytelling - Liz Blazer</description>
       <guid>Animated Storytelling - Liz Blazer-cap21</guid>
-      <pubDate>Tue, 10 Feb 2026 14:58:17 +0000</pubDate>
+      <pubDate>Tue, 10 Feb 2026 15:09:04 +0000</pubDate>
       <itunes:episode>21</itunes:episode>
       <itunes:episodeType>full</itunes:episodeType>
       <enclosure url="https://drive.google.com/uc?export=download&amp;id=1q8OmbYZ5HVS8yJor8OlDaW3v8AbzNUkA" type="audio/mpeg" length="0" />
