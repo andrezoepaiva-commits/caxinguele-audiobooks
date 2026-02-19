@@ -1,0 +1,188 @@
+╔══════════════════════════════════════════════════════════════╗
+║                 SISTEMA DE AUDIOBOOKS - ALEXA                ║
+║                   Desenvolvido pelo Andre                    ║
+╚══════════════════════════════════════════════════════════════╝
+
+Ola, amigo!
+
+O Andre desenvolveu um sistema especial para voce: um conversor de
+PDFs em audiobooks que voce pode ouvir pela sua Alexa Echo Dot.
+
+═══════════════════════════════════════════════════════════════
+  O QUE TEM NESTA PASTA
+═══════════════════════════════════════════════════════════════
+
+Tem 3 arquivos de audio (MP3), cada um com cerca de 3 minutos.
+
+Cada audio tem a MESMA explicacao completa do sistema, mas com uma
+VOZ DIFERENTE.
+
+As 3 vozes disponiveis sao:
+
+1. FRANCISCA - Feminina, jovem, natural
+   Arquivo: demo_completa_francisca.mp3
+
+2. ANTONIO - Masculino, claro
+   Arquivo: demo_completa_antonio.mp3
+
+3. THALITA - Feminina, suave
+   Arquivo: demo_completa_thalita.mp3
+
+
+═══════════════════════════════════════════════════════════════
+  O QUE VOCE VAI OUVIR EM CADA DEMO
+═══════════════════════════════════════════════════════════════
+
+Cada demo explica TUDO sobre o sistema:
+
+ 1. Como o sistema foi desenvolvido pelo Andre
+ 2. O que ele faz (converte PDF em audiobook)
+ 3. Como voce vai usar na Alexa
+ 4. TODOS os comandos de voz disponiveis:
+    - Pausar, continuar, proximo, anterior
+    - Voltar/avançar segundos
+    - Aumentar/diminuir velocidade
+ 5. A Alexa SEMPRE lembra onde voce parou
+ 6. Voce pode ter varios livros ao mesmo tempo
+ 7. Como escolher a voz que voce prefere
+ 8. Como pedir novos livros ao Andre
+ 9. Qualidade das vozes (inteligencia artificial)
+10. Autonomia total - voce usa SOZINHO por voz
+
+
+═══════════════════════════════════════════════════════════════
+  O QUE FAZER AGORA
+═══════════════════════════════════════════════════════════════
+
+PASSO 1: Escute as 3 demos
+
+Abra cada arquivo MP3 e escute completamente.
+
+Pode usar o computador, celular, ou qualquer aparelho que toque MP3.
+
+Dica: Tente escutar com fone de ouvido para avaliar melhor a qualidade.
+
+
+PASSO 2: Escolha 1 ou 2 vozes favoritas
+
+Depois de ouvir as 3, escolha qual(is) voce mais gostou.
+
+Nao tem certo ou errado - escolha a voz que voce achar mais agradavel
+e natural para ouvir por horas.
+
+
+PASSO 3: Avise o Andre
+
+Diga ao Andre qual(is) voz(es) voce escolheu.
+
+Por exemplo:
+  "Gostei mais da Francisca"
+  ou
+  "Prefiro a Antonio"
+  ou
+  "Gostei da Francisca e da Thalita"
+
+
+═══════════════════════════════════════════════════════════════
+  DEPOIS QUE VOCE ESCOLHER
+═══════════════════════════════════════════════════════════════
+
+O Andre vai:
+
+1. Converter seus primeiros livros usando a voz escolhida
+2. Fazer upload para o Google Drive (gratis)
+3. Configurar no My Pod (aplicativo da Alexa)
+4. Te ensinar os primeiros comandos
+
+Em algumas horas, voce ja estara ouvindo seus livros!
+
+
+═══════════════════════════════════════════════════════════════
+  COMANDOS QUE VOCE VAI USAR (MEMORIZE!)
+═══════════════════════════════════════════════════════════════
+
+Para ABRIR o sistema:
+  "Alexa, abre My Pod"
+
+Para TOCAR um livro:
+  "Alexa, toca Sapiens"
+  (substitua "Sapiens" pelo nome do seu livro)
+
+Para PAUSAR:
+  "Alexa, pausa"
+
+Para CONTINUAR:
+  "Alexa, continua"
+
+Para PROXIMO CAPITULO:
+  "Alexa, proximo"
+
+Para CAPITULO ANTERIOR:
+  "Alexa, anterior"
+
+Para VOLTAR alguns segundos:
+  "Alexa, volta 30 segundos"
+
+Para AVANÇAR:
+  "Alexa, avança 1 minuto"
+
+Para VELOCIDADE:
+  "Alexa, aumenta velocidade"
+  "Alexa, diminui velocidade"
+
+
+═══════════════════════════════════════════════════════════════
+  PERGUNTAS FREQUENTES
+═══════════════════════════════════════════════════════════════
+
+P: Posso ter varios livros ao mesmo tempo?
+R: SIM! Voce pode ter dezenas de livros. Cada um mantem sua posicao.
+
+P: A Alexa lembra onde eu parei?
+R: SIM! Mesmo se desligar ou ficar dias sem ouvir, ela retoma no lugar.
+
+P: Preciso pagar algo?
+R: NAO! O sistema e 100% gratuito. Nao tem custo nenhum.
+
+P: E se eu nao gostar da voz depois?
+R: O Andre pode converter novamente com outra voz.
+
+P: Posso pedir qualquer livro?
+R: SIM! Qualquer PDF: livros, artigos, apostilas, documentos.
+
+P: Quanto tempo demora para ter um livro pronto?
+R: Algumas horas. O Andre converte e em poucas horas esta pronto.
+
+P: E dificil de usar?
+R: NAO! E 100% por voz. Voce nao mexe em nada, so fala com a Alexa.
+
+
+═══════════════════════════════════════════════════════════════
+  NOSSA RECOMENDACAO
+═══════════════════════════════════════════════════════════════
+
+Das 3 vozes, nossa recomendacao pessoal e:
+
+FRANCISCA - E a mais natural e jovem. Muito agradavel para longas horas.
+
+Mas voce deve escolher a que VOCE mais gostar! :)
+
+
+═══════════════════════════════════════════════════════════════
+  PROXIMOS PASSOS (RESUMO)
+═══════════════════════════════════════════════════════════════
+
+1. Escute as 3 demos (9 minutos total)
+2. Escolha sua favorita
+3. Avise o Andre
+4. Em breve voce estara ouvindo livros pela Alexa!
+
+
+═══════════════════════════════════════════════════════════════
+
+Sistema desenvolvido com ♥ pelo Andre
+Especialmente para voce ter autonomia e acesso ao conhecimento
+
+100% GRATUITO | 100% POR VOZ | 100% AUTONOMO
+
+═══════════════════════════════════════════════════════════════

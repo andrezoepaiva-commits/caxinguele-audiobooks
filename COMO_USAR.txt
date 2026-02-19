@@ -1,0 +1,139 @@
+╔══════════════════════════════════════════════════════════════╗
+║                  COMO USAR - PDF2AUDIOBOOK                   ║
+╚══════════════════════════════════════════════════════════════╝
+
+═══════════════════════════════════════════════════════════════
+  METODO 1: MAIS FACIL (Arrastar e Soltar)
+═══════════════════════════════════════════════════════════════
+
+1. Arraste seu arquivo PDF sobre o arquivo:
+
+   converter.bat
+
+2. Aguarde a conversao (30-60 min para livros grandes)
+
+3. Pronto! Arquivos estao em: audiobooks\[Nome do Livro]\
+
+
+═══════════════════════════════════════════════════════════════
+  METODO 2: LINHA DE COMANDO (Mais Controle)
+═══════════════════════════════════════════════════════════════
+
+1. Abra o terminal (cmd ou PowerShell) nesta pasta
+
+2. Execute:
+
+   python pipeline_mvp.py --pdf "seu_livro.pdf"
+
+   (Se nao tiver Google Drive configurado, use --no-upload)
+
+
+═══════════════════════════════════════════════════════════════
+  TROCAR VOZ
+═══════════════════════════════════════════════════════════════
+
+python pipeline_mvp.py --pdf "livro.pdf" --voz camila --no-upload
+
+Vozes disponiveis:
+  - francisca (padrao) - Feminina, jovem
+  - camila - Feminina, madura
+  - antonio - Masculino
+  - thalita - Feminina, suave
+
+
+═══════════════════════════════════════════════════════════════
+  VERIFICAR SE ESTA TUDO OK
+═══════════════════════════════════════════════════════════════
+
+python verificar_sistema.py
+
+
+═══════════════════════════════════════════════════════════════
+  CRIAR PDF DE TESTE
+═══════════════════════════════════════════════════════════════
+
+1. Instalar reportlab:
+   pip install reportlab
+
+2. Criar PDF:
+   python exemplo_teste.py
+
+3. Testar:
+   python pipeline_mvp.py --pdf exemplo_teste.pdf --no-upload
+
+
+═══════════════════════════════════════════════════════════════
+  GOOGLE DRIVE (OPCIONAL)
+═══════════════════════════════════════════════════════════════
+
+Se quiser fazer upload automatico para Google Drive:
+
+1. Acesse: https://console.cloud.google.com/
+2. Crie projeto
+3. Ative API Google Drive
+4. Crie credenciais OAuth 2.0
+5. Baixe como credentials.json nesta pasta
+
+Depois pode usar SEM --no-upload:
+  python pipeline_mvp.py --pdf "livro.pdf"
+
+
+═══════════════════════════════════════════════════════════════
+  TESSERACT (PARA PDFs ESCANEADOS)
+═══════════════════════════════════════════════════════════════
+
+Se seu PDF eh uma imagem escaneada:
+
+1. Baixe Tesseract:
+   https://github.com/UB-Mannheim/tesseract/wiki
+
+2. Instale com idioma Portugues
+
+3. O sistema detectara automaticamente e aplicara OCR
+
+
+═══════════════════════════════════════════════════════════════
+  ARQUIVOS IMPORTANTES
+═══════════════════════════════════════════════════════════════
+
+pipeline_mvp.py          - Script principal
+verificar_sistema.py     - Verifica configuracao
+testar_vozes.py         - Testa vozes disponiveis
+exemplo_teste.py        - Cria PDF de teste
+converter.bat           - Atalho Windows (arrastar e soltar)
+
+GUIA_RAPIDO.md          - Guia completo de uso
+README.md               - Documentacao tecnica completa
+
+
+═══════════════════════════════════════════════════════════════
+  PROBLEMAS COMUNS
+═══════════════════════════════════════════════════════════════
+
+"PDF not found"
+  -> Verifique o caminho, use aspas se tiver espacos
+
+"Tesseract not found"
+  -> Seu PDF eh escaneado, instale Tesseract
+  -> OU use --no-ocr (pode falhar)
+
+"Google credentials not found"
+  -> Use --no-upload (gera arquivos localmente)
+  -> OU configure Google Drive (veja acima)
+
+"Edge-TTS timeout"
+  -> Problema de internet
+  -> Sistema tenta 3x automaticamente
+
+
+═══════════════════════════════════════════════════════════════
+  DUVIDAS?
+═══════════════════════════════════════════════════════════════
+
+Leia: GUIA_RAPIDO.md
+Ou:   README.md
+
+
+═══════════════════════════════════════════════════════════════
+
+Desenvolvido com ♥ para promover acessibilidade

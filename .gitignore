@@ -1,0 +1,23 @@
+# Credenciais e tokens — NUNCA commitar!
+.env
+credentials.json
+token.json
+
+# Saída gerada
+audiobooks/
+temp/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Checkpoints
+.checkpoints/
+
+# PDFs pessoais
+*.pdf
+!exemplo_teste.pdf

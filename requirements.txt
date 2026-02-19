@@ -1,0 +1,45 @@
+# ==================== CORE ====================
+
+# Edge-TTS - Conversão texto para áudio (Azure gratuito)
+edge-tts>=6.1.0
+
+# PyMuPDF - Processamento de PDFs (extração de texto, TOC)
+PyMuPDF>=1.23.0
+
+# OCRmyPDF - OCR para PDFs escaneados
+ocrmypdf>=16.0.0
+
+# ==================== GOOGLE DRIVE ====================
+
+# Google Auth - Autenticação OAuth2
+google-auth>=2.0.0
+google-auth-oauthlib>=1.0.0
+google-auth-httplib2>=0.1.0
+
+# Google Drive API
+google-api-python-client>=2.0.0
+
+# ==================== UTILITÁRIOS ====================
+
+# tqdm - Barras de progresso
+tqdm>=4.65.0
+
+# colorama - Cores no terminal (Windows)
+colorama>=0.4.6
+
+# ==================== FALLBACK (OPCIONAL) ====================
+
+# pyttsx3 - TTS local fallback (qualidade inferior, mas offline)
+pyttsx3>=2.90
+
+# ==================== DEPENDÊNCIAS OPCIONAIS ====================
+
+# Tesseract OCR (requer instalação separada do Tesseract)
+# No Windows: https://github.com/UB-Mannheim/tesseract/wiki
+# No Linux: sudo apt-get install tesseract-ocr tesseract-ocr-por
+# No Mac: brew install tesseract tesseract-lang
+
+# ffmpeg (requer instalação separada)
+# No Windows: baixar de https://ffmpeg.org/download.html
+# No Linux: sudo apt-get install ffmpeg
+# No Mac: brew install ffmpeg

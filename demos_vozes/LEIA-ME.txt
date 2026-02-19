@@ -1,0 +1,101 @@
+╔══════════════════════════════════════════════════════════════╗
+║           DEMOS DE VOZES - ESCOLHA SUA FAVORITA              ║
+╚══════════════════════════════════════════════════════════════╝
+
+Ola! Este sistema foi criado para converter PDFs em audiobooks
+que voce pode ouvir pela Alexa.
+
+Preparamos 5 demos de vozes diferentes para voce escolher.
+
+═══════════════════════════════════════════════════════════════
+  VOZES DISPONIVEIS (Sotaque Brasileiro)
+═══════════════════════════════════════════════════════════════
+
+1. FRANCISCA - Feminina, Jovem, Natural
+   Arquivo: demo_francisca.mp3
+
+2. ANTONIO - Masculino, Claro
+   Arquivo: demo_antonio.mp3
+
+3. THALITA - Feminina, Suave
+   Arquivo: demo_thalita.mp3
+
+
+═══════════════════════════════════════════════════════════════
+  VOZES DISPONIVEIS (Sotaque de Portugal)
+═══════════════════════════════════════════════════════════════
+
+4. DUARTE - Masculino, Portugal
+   Arquivo: demo_duarte_portugal.mp3
+
+5. RAQUEL - Feminina, Portugal
+   Arquivo: demo_raquel_portugal.mp3
+
+
+═══════════════════════════════════════════════════════════════
+  COMO ESCOLHER
+═══════════════════════════════════════════════════════════════
+
+1. Escute TODAS as 5 demos (30-40 segundos cada)
+
+2. Escolha 1 ou 2 vozes que voce mais gostou
+
+3. Informe qual(is) escolheu
+
+4. Vamos usar essa voz para converter seus livros!
+
+
+═══════════════════════════════════════════════════════════════
+  O QUE CADA DEMO EXPLICA
+═══════════════════════════════════════════════════════════════
+
+Cada demo tem a mesma explicacao sobre o sistema:
+- O que o sistema faz
+- Como funciona na Alexa
+- Comandos de voz disponiveis
+
+Assim voce pode comparar APENAS a qualidade da voz!
+
+
+═══════════════════════════════════════════════════════════════
+  NOSSA RECOMENDACAO
+═══════════════════════════════════════════════════════════════
+
+Para sotaque BRASILEIRO:
+  - Francisca (a mais natural e jovem)
+  - Antonio (se preferir voz masculina)
+
+Para sotaque PORTUGAL:
+  - Raquel (feminina, muito clara)
+  - Duarte (masculino, profissional)
+
+Mas escolha a que VOCE mais gostar! :)
+
+
+═══════════════════════════════════════════════════════════════
+  PROXIMOS PASSOS
+═══════════════════════════════════════════════════════════════
+
+Depois de escolher, vamos:
+
+1. Converter seus PDFs usando a voz escolhida
+2. Fazer upload para o Google Drive
+3. Configurar na Alexa (My Pod)
+4. Voce podera ouvir 100% por voz!
+
+Comandos que voce vai usar na Alexa:
+  "Alexa, abre My Pod"
+  "Alexa, toca [Nome do Livro]"
+  "Alexa, pausa"
+  "Alexa, proximo"
+  "Alexa, volta 30 segundos"
+
+A Alexa SEMPRE lembra onde voce parou!
+
+
+═══════════════════════════════════════════════════════════════
+
+Sistema 100% GRATUITO!
+Desenvolvido com ♥ para promover acessibilidade
+
+═══════════════════════════════════════════════════════════════
