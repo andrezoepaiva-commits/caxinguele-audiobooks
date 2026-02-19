@@ -1,0 +1,118 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "meus audiobooks",
+      "intents": [
+        {
+          "name": "ListarDocumentosIntent",
+          "slots": [],
+          "samples": [
+            "quais documentos tenho cambio",
+            "lista meus documentos cambio",
+            "o que tenho para ouvir cambio",
+            "meus documentos cambio",
+            "quais audiobooks tenho cambio",
+            "lista tudo cambio"
+          ]
+        },
+        {
+          "name": "LerDocumentoIntent",
+          "slots": [
+            {
+              "name": "numero",
+              "type": "AMAZON.NUMBER"
+            },
+            {
+              "name": "nome_documento",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "le o documento numero {numero} cambio",
+            "le o livro numero {numero} cambio",
+            "abre o documento numero {numero} cambio",
+            "quero ouvir numero {numero} cambio",
+            "le o documento novo cambio",
+            "le o mais recente cambio",
+            "le {nome_documento} cambio",
+            "abre {nome_documento} cambio"
+          ]
+        },
+        {
+          "name": "FiltrarPorTipoIntent",
+          "slots": [
+            {
+              "name": "tipo_documento",
+              "type": "TipoDocumentoType"
+            }
+          ],
+          "samples": [
+            "meus {tipo_documento} cambio",
+            "lista meus {tipo_documento} cambio",
+            "quero ver {tipo_documento} cambio",
+            "{tipo_documento} de hoje cambio",
+            "mostra {tipo_documento} cambio"
+          ]
+        },
+        {
+          "name": "FavoritarIntent",
+          "slots": [],
+          "samples": [
+            "favorite este cambio",
+            "marcar como favorito cambio",
+            "salvar nos favoritos cambio",
+            "adicionar aos favoritos cambio"
+          ]
+        },
+        {
+          "name": "MostrarFavoritosIntent",
+          "slots": [],
+          "samples": [
+            "mostra meus favoritos cambio",
+            "quais sao meus favoritos cambio",
+            "lista favoritos cambio",
+            "meus favoritos cambio"
+          ]
+        },
+        {
+          "name": "DocumentoNovosIntent",
+          "slots": [],
+          "samples": [
+            "documentos novos cambio",
+            "o que chegou novo cambio",
+            "novidades cambio",
+            "documentos de hoje cambio",
+            "o que ha de novo cambio"
+          ]
+        },
+        {
+          "name": "AMAZON.HelpIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.StopIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.CancelIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.NavigateHomeIntent",
+          "samples": []
+        }
+      ],
+      "types": [
+        {
+          "name": "TipoDocumentoType",
+          "values": [
+            {"name": {"value": "livros", "synonyms": ["livro", "ebook", "ebooks"]}},
+            {"name": {"value": "artigos", "synonyms": ["artigo", "noticias", "noticia"]}},
+            {"name": {"value": "emails", "synonyms": ["email", "mensagem", "mensagens"]}},
+            {"name": {"value": "documentos", "synonyms": ["documento", "arquivos"]}}
+          ]
+        }
+      ]
+    }
+  }
+}

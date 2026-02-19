@@ -1,17 +1,49 @@
 # ==================== CORE ====================
 
-# Edge-TTS - Conversão texto para áudio (Azure gratuito)
+# Edge-TTS - Conversao texto para audio (Azure gratuito)
 edge-tts>=6.1.0
 
-# PyMuPDF - Processamento de PDFs (extração de texto, TOC)
+# PyMuPDF - Processamento de PDFs (extracao de texto, TOC)
 PyMuPDF>=1.23.0
 
 # OCRmyPDF - OCR para PDFs escaneados
 ocrmypdf>=16.0.0
 
+# ==================== MULTI-FORMATO (Caxinguele v2) ====================
+
+# python-docx - Leitura de arquivos Word (.docx)
+python-docx>=1.0.0
+
+# striprtf - Leitura de arquivos RTF
+striprtf>=0.0.26
+
+# odfpy - Leitura de arquivos LibreOffice (.odt)
+odfpy>=1.4.1
+
+# ebooklib - Leitura de EPUB
+ebooklib>=0.18
+
+# mobi - Leitura de MOBI (Kindle)
+mobi>=0.3.3
+
+# extract-msg - Leitura de emails Outlook (.msg)
+extract-msg>=0.48.0
+
+# beautifulsoup4 - Leitura de HTML
+beautifulsoup4>=4.12.0
+
+# pytesseract - OCR para imagens
+pytesseract>=0.3.10
+
+# Pillow - Processamento de imagens (necessario para pytesseract)
+Pillow>=10.0.0
+
+# tkinterdnd2 - Drag-and-drop na GUI (opcional, funciona sem)
+tkinterdnd2>=0.3.0
+
 # ==================== GOOGLE DRIVE ====================
 
-# Google Auth - Autenticação OAuth2
+# Google Auth - Autenticacao OAuth2
 google-auth>=2.0.0
 google-auth-oauthlib>=1.0.0
 google-auth-httplib2>=0.1.0
@@ -19,7 +51,7 @@ google-auth-httplib2>=0.1.0
 # Google Drive API
 google-api-python-client>=2.0.0
 
-# ==================== UTILITÁRIOS ====================
+# ==================== UTILITARIOS ====================
 
 # tqdm - Barras de progresso
 tqdm>=4.65.0
@@ -32,14 +64,14 @@ colorama>=0.4.6
 # pyttsx3 - TTS local fallback (qualidade inferior, mas offline)
 pyttsx3>=2.90
 
-# ==================== DEPENDÊNCIAS OPCIONAIS ====================
+# ==================== DEPENDENCIAS OPCIONAIS ====================
 
-# Tesseract OCR (requer instalação separada do Tesseract)
+# Tesseract OCR (requer instalacao separada do Tesseract)
 # No Windows: https://github.com/UB-Mannheim/tesseract/wiki
 # No Linux: sudo apt-get install tesseract-ocr tesseract-ocr-por
 # No Mac: brew install tesseract tesseract-lang
 
-# ffmpeg (requer instalação separada)
+# ffmpeg (requer instalacao separada)
 # No Windows: baixar de https://ffmpeg.org/download.html
 # No Linux: sudo apt-get install ffmpeg
 # No Mac: brew install ffmpeg

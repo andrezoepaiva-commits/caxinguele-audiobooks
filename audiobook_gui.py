@@ -1,6 +1,12 @@
 """
-Interface grafica do sistema PDF2Audiobook - Projeto Caxinguele
-Converte PDFs em audiobooks e publica automaticamente no Spotify via Alexa
+Interface grafica do sistema Caxinguele v2
+Converte documentos multi-formato em audiobooks para Alexa
+
+Novidades v2:
+  - Suporte multi-formato (PDF, DOCX, EPUB, TXT, Email, Imagem, etc.)
+  - Drag-and-drop de arquivos na janela
+  - Seletor de destinatario (Eu / Meu Amigo)
+  - Icone visual por tipo detectado
 """
 
 import tkinter as tk
@@ -13,6 +19,10 @@ from pathlib import Path
 from datetime import datetime
 
 sys.path.insert(0, str(Path(__file__).parent))
+
+from doc_processor import FILTRO_EXTENSOES, formato_suportado
+from doc_classifier import classificar_documento, ICONES_TIPO, NOMES_TIPO, obter_opcoes_tipo_gui
+from config import PERFIS_USUARIOS, DESTINATARIO_PADRAO
 
 # ==================== CORES ====================
 
@@ -37,10 +47,11 @@ C = {
     "etapa_ok":   "#43d98c",
     "etapa_ativa":"#6c63ff",
     "etapa_esp":  "#2a2d3e",
+    "drop_ativo": "#1e2233",  # Cor quando arrasta arquivo sobre a janela
 }
 
 ETAPAS = [
-    "Lendo PDF",
+    "Lendo Doc",
     "Processando",
     "Gerando Audio",
     "Google Drive",
@@ -52,21 +63,23 @@ class AudiobookGUI:
 
     def __init__(self, root):
         self.root = root
-        self.root.title("Projeto Caxinguele  |  Audiobooks para Alexa")
-        self.root.geometry("820x720")
+        self.root.title("Projeto Caxinguele v2  |  Audiobooks para Alexa")
+        self.root.geometry("820x780")
         self.root.configure(bg=C["bg"])
         self.root.resizable(True, True)
-        self.root.minsize(700, 600)
+        self.root.minsize(700, 650)
 
         self.fila = queue.Queue()
         self.processando = False
-        self.pdf_selecionado = None
+        self.arquivo_selecionado = None  # Renomeado de pdf_selecionado
+        self.tipo_detectado = None       # ClassificacaoDocumento
         self.inicio_conversao = None
         self.etapa_atual = -1
         self.total_caps = 0
         self.caps_feitos = 0
 
         self._construir_interface()
+        self._configurar_drag_drop()
         self._verificar_sistema_async()
         self.root.after(100, self._processar_fila)
 
@@ -82,15 +95,15 @@ class AudiobookGUI:
         inner = tk.Frame(header, bg=C["painel"], padx=20, pady=14)
         inner.pack(side="left", fill="both", expand=True)
 
-        tk.Label(inner, text="PROJETO CAXINGUELE",
+        tk.Label(inner, text="PROJETO CAXINGUELE v2",
                  font=("Segoe UI", 16, "bold"),
                  bg=C["painel"], fg=C["texto"]).pack(anchor="w")
-        tk.Label(inner, text="Sistema de Audiobooks para Alexa  •  Powered by Edge-TTS + Amazon Music",
+        tk.Label(inner, text="Audiobooks para Alexa  |  PDF, Word, EPUB, Email, Imagem e mais",
                  font=("Segoe UI", 9),
                  bg=C["painel"], fg=C["texto2"]).pack(anchor="w")
 
         # Status dot
-        self.dot_status = tk.Label(inner, text="● Pronto",
+        self.dot_status = tk.Label(inner, text="Pronto",
                                    font=("Segoe UI", 9, "bold"),
                                    bg=C["painel"], fg=C["ok"])
         self.dot_status.pack(anchor="w", pady=(4, 0))
@@ -105,37 +118,75 @@ class AudiobookGUI:
         corpo = tk.Frame(self.root, bg=C["bg"])
         corpo.pack(fill="both", expand=True, padx=20)
 
-        # Coluna esquerda: formulario
         col_esq = tk.Frame(corpo, bg=C["bg"])
         col_esq.pack(fill="both", expand=True)
 
-        # -- PDF --
-        self._secao(col_esq, "1   Selecionar PDF")
+        # -- SELECIONAR DOCUMENTO (com area de drag-drop) --
+        self._secao(col_esq, "1   Selecionar Documento  (arraste ou clique)")
 
-        frame_pdf = tk.Frame(col_esq, bg=C["bg"])
-        frame_pdf.pack(fill="x", pady=(4, 0))
+        # Area de drag-and-drop
+        self.frame_drop = tk.Frame(col_esq, bg=C["entrada"],
+                                   highlightbackground=C["borda"],
+                                   highlightthickness=2,
+                                   cursor="hand2")
+        self.frame_drop.pack(fill="x", pady=(4, 0), ipady=12)
 
-        self.label_pdf = tk.Label(
-            frame_pdf,
-            text="Nenhum arquivo selecionado...",
-            font=("Segoe UI", 10), anchor="w",
-            bg=C["entrada"], fg=C["texto2"],
-            padx=12, pady=9, relief="flat"
+        self.label_drop_icone = tk.Label(
+            self.frame_drop, text="",
+            font=("Segoe UI", 18),
+            bg=C["entrada"], fg=C["texto2"]
         )
-        self.label_pdf.pack(side="left", fill="x", expand=True)
+        self.label_drop_icone.pack()
 
-        tk.Button(frame_pdf, text="  Abrir PDF  ",
-                  command=self._selecionar_pdf,
+        self.label_arquivo = tk.Label(
+            self.frame_drop,
+            text="Arraste um arquivo aqui ou clique para selecionar",
+            font=("Segoe UI", 10), anchor="center",
+            bg=C["entrada"], fg=C["texto2"],
+        )
+        self.label_arquivo.pack()
+
+        self.label_tipo = tk.Label(
+            self.frame_drop,
+            text="",
+            font=("Segoe UI", 9),
+            bg=C["entrada"], fg=C["acento"],
+        )
+        self.label_tipo.pack()
+
+        # Clique na area de drop abre o seletor
+        for widget in [self.frame_drop, self.label_drop_icone, self.label_arquivo, self.label_tipo]:
+            widget.bind("<Button-1>", lambda e: self._selecionar_arquivo())
+
+        # Botoes: Abrir + Guia para Alexa
+        frame_btn_abrir = tk.Frame(col_esq, bg=C["bg"])
+        frame_btn_abrir.pack(fill="x", pady=(4, 0))
+
+        tk.Button(frame_btn_abrir, text="  Abrir Documento  ",
+                  command=self._selecionar_arquivo,
                   bg=C["acento"], fg="white",
                   font=("Segoe UI", 10, "bold"),
                   relief="flat", cursor="hand2",
                   padx=4, pady=5,
                   activebackground="#5a52e0",
                   activeforeground="white"
-                  ).pack(side="right", padx=(8, 0))
+                  ).pack(side="right")
+
+        # Botao especial: converter guia de operacao para MP3
+        self.btn_guia = tk.Button(
+            frame_btn_abrir,
+            text="Guia p/ Alexa",
+            command=self._converter_guia_para_mp3,
+            bg=C["aviso"], fg=C["bg"],
+            font=("Segoe UI", 9, "bold"),
+            relief="flat", cursor="hand2",
+            padx=6, pady=5,
+            activebackground="#e6b800"
+        )
+        self.btn_guia.pack(side="right", padx=(0, 8))
 
         # -- NOME --
-        self._secao(col_esq, "2   Nome do livro  (aparece na Alexa)")
+        self._secao(col_esq, "2   Nome  (aparece na Alexa)")
 
         self.entry_nome = tk.Entry(
             col_esq,
@@ -146,7 +197,7 @@ class AudiobookGUI:
         )
         self.entry_nome.pack(fill="x", ipady=8, pady=(4, 0))
 
-        # -- OPCOES --
+        # -- OPCOES + DESTINATARIO --
         self._secao(col_esq, "3   Opcoes")
 
         frame_ops = tk.Frame(col_esq, bg=C["bg"])
@@ -158,12 +209,32 @@ class AudiobookGUI:
         self._checkbox(frame_ops, "Subir para Google Drive", self.var_drive)
         self._checkbox(frame_ops, "Publicar RSS no GitHub", self.var_github)
 
+        # Seletor de destinatario
+        frame_dest = tk.Frame(col_esq, bg=C["bg"])
+        frame_dest.pack(fill="x", pady=(8, 0))
+
+        tk.Label(frame_dest, text="Enviar para:",
+                 font=("Segoe UI", 10),
+                 bg=C["bg"], fg=C["texto2"]).pack(side="left")
+
+        self.var_destinatario = tk.StringVar(value=DESTINATARIO_PADRAO)
+        for chave, perfil in PERFIS_USUARIOS.items():
+            tk.Radiobutton(
+                frame_dest, text=perfil["nome"],
+                variable=self.var_destinatario, value=chave,
+                bg=C["bg"], fg=C["texto"],
+                selectcolor=C["entrada"],
+                activebackground=C["bg"],
+                font=("Segoe UI", 10),
+                cursor="hand2"
+            ).pack(side="left", padx=(10, 0))
+
         # -- BOTAO --
-        tk.Frame(col_esq, bg=C["bg"], height=14).pack()
+        tk.Frame(col_esq, bg=C["bg"], height=10).pack()
 
         self.btn_converter = tk.Button(
             col_esq,
-            text="▶   CONVERTER E PUBLICAR",
+            text="CONVERTER E PUBLICAR",
             command=self._iniciar_conversao,
             bg=C["acento"], fg="white",
             font=("Segoe UI", 12, "bold"),
@@ -211,7 +282,7 @@ class AudiobookGUI:
                                     bg=C["bg"], fg=C["texto2"], anchor="e")
         self.label_tempo.pack(side="right")
 
-        # -- RSS URL -- (aparece após conversão)
+        # -- RSS URL -- (aparece apos conversao)
         self.frame_rss = tk.Frame(col_esq, bg=C["entrada"],
                                   highlightbackground=C["ok"],
                                   highlightthickness=1)
@@ -219,11 +290,10 @@ class AudiobookGUI:
         frame_rss_inner = tk.Frame(self.frame_rss, bg=C["entrada"])
         frame_rss_inner.pack(fill="x", padx=10, pady=8)
 
-        tk.Label(frame_rss_inner, text="RSS gerado — siga os passos abaixo:",
+        tk.Label(frame_rss_inner, text="RSS gerado - siga os passos abaixo:",
                  font=("Segoe UI", 8, "bold"),
                  bg=C["entrada"], fg=C["ok"]).pack(anchor="w")
 
-        # Linha 1: Amazon Music
         tk.Label(frame_rss_inner, text="1. Abra o site do Amazon Music:",
                  font=("Segoe UI", 8),
                  bg=C["entrada"], fg=C["texto2"]).pack(anchor="w", pady=(6, 0))
@@ -250,8 +320,7 @@ class AudiobookGUI:
                   activebackground="#e6b800"
                   ).pack(side="right")
 
-        # Linha 2: URL do RSS
-        tk.Label(frame_rss_inner, text="2. Cole o RSS do livro convertido:",
+        tk.Label(frame_rss_inner, text="2. Cole o RSS do documento convertido:",
                  font=("Segoe UI", 8),
                  bg=C["entrada"], fg=C["texto2"]).pack(anchor="w", pady=(8, 0))
 
@@ -277,7 +346,6 @@ class AudiobookGUI:
                   activebackground="#35c07a"
                   ).pack(side="right")
 
-        # Esconde o frame RSS inicialmente
         self.frame_rss.pack(fill="x", pady=(8, 0))
         self.frame_rss.pack_forget()
 
@@ -337,8 +405,67 @@ class AudiobookGUI:
         footer = tk.Frame(self.root, bg=C["painel"], pady=7)
         footer.pack(fill="x", side="bottom")
         tk.Label(footer,
-                 text="Projeto Caxinguele  •  Voz: Thalita (pt-BR)  •  Drive + Amazon Music + Alexa",
+                 text="Projeto Caxinguele v2  |  Voz: Thalita (pt-BR)  |  Drive + Amazon Music + Alexa",
                  font=("Segoe UI", 8), bg=C["painel"], fg=C["texto2"]).pack()
+
+    # ──────────────────────────── DRAG AND DROP ────────────────────────────
+
+    def _configurar_drag_drop(self):
+        """Configura drag-and-drop usando tkinterdnd2 (se disponivel)"""
+        try:
+            # Tenta importar tkinterdnd2 para drag-and-drop nativo
+            from tkinterdnd2 import DND_FILES
+            self.root.drop_target_register(DND_FILES)
+            self.root.dnd_bind('<<Drop>>', self._on_drop)
+            self.root.dnd_bind('<<DragEnter>>', self._on_drag_enter)
+            self.root.dnd_bind('<<DragLeave>>', self._on_drag_leave)
+            self._escrever_log("Drag-and-drop ativado", "dim")
+        except (ImportError, Exception):
+            # tkinterdnd2 nao disponivel - funciona sem drag-drop
+            # Nao precisa mostrar erro, o botao "Abrir" funciona normalmente
+            pass
+
+    def _on_drag_enter(self, event):
+        """Visual feedback quando arquivo entra na janela"""
+        self.frame_drop.config(highlightbackground=C["acento"], highlightthickness=3)
+        self.label_arquivo.config(text="Solte o arquivo aqui!", fg=C["acento"])
+
+    def _on_drag_leave(self, event):
+        """Volta ao visual normal"""
+        self.frame_drop.config(highlightbackground=C["borda"], highlightthickness=2)
+        if not self.arquivo_selecionado:
+            self.label_arquivo.config(
+                text="Arraste um arquivo aqui ou clique para selecionar",
+                fg=C["texto2"]
+            )
+
+    def _on_drop(self, event):
+        """Processa arquivo solto na janela"""
+        # tkinterdnd2 retorna o caminho entre chaves no Windows
+        caminho = event.data.strip()
+        if caminho.startswith('{') and caminho.endswith('}'):
+            caminho = caminho[1:-1]
+
+        # Se soltou multiplos arquivos, pega o primeiro
+        if '\n' in caminho:
+            caminho = caminho.split('\n')[0].strip()
+
+        caminho = Path(caminho)
+
+        # Volta visual normal
+        self.frame_drop.config(highlightbackground=C["borda"], highlightthickness=2)
+
+        if caminho.exists() and formato_suportado(caminho):
+            self._definir_arquivo(caminho)
+        else:
+            self.label_arquivo.config(
+                text=f"Formato nao suportado: {caminho.suffix}",
+                fg=C["erro"]
+            )
+            self.root.after(3000, lambda: self.label_arquivo.config(
+                text="Arraste um arquivo aqui ou clique para selecionar",
+                fg=C["texto2"]
+            ))
 
     # ──────────────────────────── HELPERS DE UI ────────────────────────────
 
@@ -368,7 +495,7 @@ class AudiobookGUI:
             f = tk.Frame(self.frame_etapas, bg=C["bg"])
             f.pack(side="left")
 
-            num = "✓" if i < ativa else str(i + 1)
+            num = "V" if i < ativa else str(i + 1)
             tk.Label(f, text=num,
                      font=("Segoe UI", 8, "bold"),
                      bg=cor_circ, fg="white",
@@ -379,38 +506,60 @@ class AudiobookGUI:
                      bg=C["bg"], fg=cor_txt).pack(side="left")
 
             if i < len(ETAPAS) - 1:
-                tk.Label(self.frame_etapas, text="→",
+                tk.Label(self.frame_etapas, text="->",
                          font=("Segoe UI", 9),
                          bg=C["bg"], fg=C["borda"]).pack(side="left", padx=2)
 
     # ──────────────────────────── ACOES ────────────────────────────
 
-    def _selecionar_pdf(self):
+    def _selecionar_arquivo(self):
+        """Abre seletor de arquivo multi-formato"""
         arquivo = filedialog.askopenfilename(
-            title="Selecione o PDF",
-            filetypes=[("PDF", "*.pdf"), ("Todos", "*.*")]
+            title="Selecione o documento",
+            filetypes=FILTRO_EXTENSOES
         )
         if arquivo:
-            self.pdf_selecionado = Path(arquivo)
-            self.label_pdf.config(
-                text=f"  {self.pdf_selecionado.name}",
-                fg=C["texto"]
-            )
-            nome = self.pdf_selecionado.stem.replace("_", " ").replace("-", " ")
-            self.entry_nome.delete(0, "end")
-            self.entry_nome.insert(0, nome)
+            self._definir_arquivo(Path(arquivo))
+
+    def _definir_arquivo(self, caminho: Path):
+        """Define o arquivo selecionado e detecta tipo"""
+        self.arquivo_selecionado = caminho
+
+        # Atualiza visual da area de drop
+        self.label_arquivo.config(
+            text=f"  {caminho.name}",
+            fg=C["texto"]
+        )
+
+        # Detecta tipo
+        self.tipo_detectado = classificar_documento(caminho)
+        self.label_drop_icone.config(text=self.tipo_detectado.icone)
+        self.label_tipo.config(
+            text=f"Tipo: {self.tipo_detectado.nome}  ({self.tipo_detectado.confianca:.0%} confianca)",
+            fg=C["acento"]
+        )
+
+        # Auto-preenche nome
+        nome = caminho.stem.replace("_", " ").replace("-", " ")
+        self.entry_nome.delete(0, "end")
+        self.entry_nome.insert(0, nome)
+
+        self._escrever_log(
+            f"Arquivo: {caminho.name}  |  Tipo: {self.tipo_detectado.icone} {self.tipo_detectado.nome}",
+            "info"
+        )
 
     def _iniciar_conversao(self):
         if self.processando:
             return
 
-        if not self.pdf_selecionado:
-            messagebox.showwarning("Aviso", "Selecione um arquivo PDF primeiro.")
+        if not self.arquivo_selecionado:
+            messagebox.showwarning("Aviso", "Selecione um documento primeiro.")
             return
 
         nome = self.entry_nome.get().strip()
         if not nome:
-            messagebox.showwarning("Aviso", "Digite o nome do livro.")
+            messagebox.showwarning("Aviso", "Digite o nome do documento.")
             return
 
         self.processando = True
@@ -418,24 +567,26 @@ class AudiobookGUI:
         self.total_caps = 0
         self.caps_feitos = 0
         self.barra_var.set(0)
-        self.btn_converter.config(state="disabled", text="⏳  Processando...")
-        self.dot_status.config(text="● Convertendo", fg=C["acento"])
+        self.btn_converter.config(state="disabled", text="Processando...")
+        self.dot_status.config(text="Convertendo", fg=C["acento"])
         self._desenhar_etapas(0)
-        self._escrever_log("━" * 55, "dim")
-        self._escrever_log(f"NOVO LIVRO: {nome}", "bold")
-        self._escrever_log(f"Arquivo : {self.pdf_selecionado.name}", "dim")
-        self._escrever_log(f"Opcoes  : Drive={self.var_drive.get()}  GitHub={self.var_github.get()}", "dim")
+        self._escrever_log("-" * 55, "dim")
+        self._escrever_log(f"NOVO: {nome}", "bold")
+        self._escrever_log(f"Arquivo : {self.arquivo_selecionado.name}", "dim")
+        if self.tipo_detectado:
+            self._escrever_log(f"Tipo    : {self.tipo_detectado.icone} {self.tipo_detectado.nome}", "dim")
+        dest = PERFIS_USUARIOS.get(self.var_destinatario.get(), {}).get("nome", "Eu")
+        self._escrever_log(f"Destino : {dest}  |  Drive={self.var_drive.get()}  GitHub={self.var_github.get()}", "dim")
         self._atualizar_tempo()
 
         threading.Thread(
             target=self._executar_pipeline,
-            args=(self.pdf_selecionado, nome),
+            args=(self.arquivo_selecionado, nome),
             daemon=True
         ).start()
 
-    def _executar_pipeline(self, pdf_path, nome_livro):
+    def _executar_pipeline(self, doc_path, nome_livro):
         def on_progresso(msg):
-            # Detecta total de capitulos
             import re
             m = re.search(r"Total de arquivos.*?(\d+)", str(msg))
             if m:
@@ -448,7 +599,7 @@ class AudiobookGUI:
         try:
             from pipeline_mvp import executar_pipeline_completo
             resultado = executar_pipeline_completo(
-                caminho_pdf=str(pdf_path),
+                caminho_pdf=str(doc_path),  # Nome mantido por compatibilidade
                 nome_livro=nome_livro,
                 fazer_upload=self.var_drive.get(),
                 publicar_rss=self.var_github.get(),
@@ -528,8 +679,7 @@ class AudiobookGUI:
                     else:
                         tag = "info"
                     self._escrever_log(msg, tag)
-                    # Atualiza status com mensagem curta
-                    if len(msg) > 4 and not msg.startswith("─") and not msg.startswith("━"):
+                    if len(msg) > 4 and not msg.startswith("-") and not msg.startswith("="):
                         self.label_status.config(text=msg[:70])
 
                 elif tipo == "log_ok":
@@ -551,7 +701,6 @@ class AudiobookGUI:
                     self.total_caps = total
                     if total > 0:
                         pct = int(feitos / total * 100)
-                        # 0-100% = fase TTS ocupa 70% da barra (10% PDF, 70% TTS, 10% Drive, 10% RSS)
                         pct_barra = 10 + int(feitos / total * 70)
                         self.barra_var.set(pct_barra)
                         self.label_pct.config(text=f"{pct}%  ({feitos}/{total} caps)")
@@ -564,16 +713,15 @@ class AudiobookGUI:
 
     def _finalizar(self, sucesso):
         self.processando = False
-        # Não chamar barra.stop() — está em modo determinate, não tem efeito
 
         if sucesso:
             self.barra_var.set(100)
             self.label_pct.config(text="100%")
             self._desenhar_etapas(len(ETAPAS))
-            self.dot_status.config(text="● Concluido", fg=C["ok"])
+            self.dot_status.config(text="Concluido", fg=C["ok"])
             self.btn_converter.config(
                 state="normal",
-                text="▶   CONVERTER E PUBLICAR",
+                text="CONVERTER E PUBLICAR",
                 bg=C["ok"]
             )
             self.root.after(4000, lambda: self.btn_converter.config(bg=C["acento"]))
@@ -583,7 +731,6 @@ class AudiobookGUI:
             segs = tempo % 60
             tempo_str = f"{mins} min {segs}s" if mins > 0 else f"{segs} segundos"
 
-            # Monta e exibe a URL do RSS
             from config import GITHUB_CONFIG
             nome_arquivo = nome.lower().replace(" ", "-")
             for char in '!@#$%^&*()+=[]{}|;:,.<>?/\\\'\"':
@@ -593,14 +740,52 @@ class AudiobookGUI:
             self.entry_rss.insert(0, url_rss)
             self.frame_rss.pack(fill="x", pady=(8, 0), before=self.frame_log_header)
 
+            dest = PERFIS_USUARIOS.get(self.var_destinatario.get(), {}).get("nome", "")
             messagebox.showinfo("Publicado!",
-                f"Livro disponivel na Alexa!\n\n"
+                f"Documento disponivel na Alexa!\n\n"
                 f"Diga: 'Alexa, toca {nome} no Amazon Music'\n\n"
+                f"Destino: {dest}\n"
                 f"Tempo total: {tempo_str}")
         else:
             self._desenhar_etapas(-1)
-            self.dot_status.config(text="● Erro - verifique o log", fg=C["erro"])
-            self.btn_converter.config(state="normal", text="▶   CONVERTER E PUBLICAR")
+            self.dot_status.config(text="Erro - verifique o log", fg=C["erro"])
+            self.btn_converter.config(state="normal", text="CONVERTER E PUBLICAR")
+
+    def _converter_guia_para_mp3(self):
+        """
+        Converte GUIA_ALEXA_ACESSIVEL.md para MP3 e sobe para o Drive.
+        Permite que o amigo cego acesse o guia via Alexa.
+        """
+        guia_path = Path(__file__).parent / "GUIA_ALEXA_ACESSIVEL.md"
+
+        if not guia_path.exists():
+            messagebox.showwarning(
+                "Guia nao encontrado",
+                f"Arquivo nao encontrado:\n{guia_path}\n\n"
+                "Recrie o arquivo GUIA_ALEXA_ACESSIVEL.md"
+            )
+            return
+
+        resposta = messagebox.askyesno(
+            "Converter Guia para Alexa",
+            "Isso vai:\n\n"
+            "1. Converter o GUIA_ALEXA_ACESSIVEL.md em MP3 (~10 min de audio)\n"
+            "2. Subir para o Google Drive\n"
+            "3. Publicar no RSS\n\n"
+            "O guia ficara disponivel na Alexa.\n"
+            "Continuar?"
+        )
+
+        if not resposta:
+            return
+
+        # Define o arquivo como selecionado e nome padrao
+        self._definir_arquivo(guia_path)
+        self.entry_nome.delete(0, "end")
+        self.entry_nome.insert(0, "Guia de Operacao da Biblioteca")
+
+        # Inicia conversao normalmente
+        self._iniciar_conversao()
 
     def _verificar_sistema_async(self):
         def verificar():
@@ -615,7 +800,14 @@ class AudiobookGUI:
 # ──────────────────────────── MAIN ────────────────────────────
 
 def main():
-    root = tk.Tk()
+    # Tenta usar tkinterdnd2.TkinterDnD para suporte drag-and-drop
+    try:
+        from tkinterdnd2 import TkinterDnD
+        root = TkinterDnD.Tk()
+    except ImportError:
+        # Sem drag-and-drop, funciona normalmente com botao "Abrir"
+        root = tk.Tk()
+
     try:
         icon = Path(__file__).parent / "icon.ico"
         if icon.exists():

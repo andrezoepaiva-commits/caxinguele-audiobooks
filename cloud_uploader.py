@@ -312,16 +312,27 @@ def upload_audiobook(
     arquivos: List[Path],
     nome_livro: str,
     pasta_raiz_id: str = None,
-    criar_pasta_livro: bool = True
+    criar_pasta_livro: bool = True,
+    categoria: str = None
 ) -> List[Dict]:
     """
     Faz upload de audiobook completo (multiplos capitulos)
+    Organiza automaticamente por categoria no Drive.
+
+    Estrutura:
+        Audiobooks - Alexa/
+        +-- Livros/
+        +-- Artigos e Noticias/
+        +-- Emails/
+        +-- Documentos/
+        +-- Favoritos/
 
     Args:
         arquivos: Lista de arquivos MP3
         nome_livro: Nome do livro
         pasta_raiz_id: ID da pasta raiz (se None, busca pelo nome)
         criar_pasta_livro: Se True, cria subpasta para o livro
+        categoria: Subpasta de categoria (ex: "Livros", "Emails")
 
     Returns:
         Lista de dicts com informacoes dos arquivos
@@ -330,23 +341,32 @@ def upload_audiobook(
 
     service = obter_servico_drive()
 
-    # Obtém pasta raiz
+    # Obtem pasta raiz
     if not pasta_raiz_id:
         pasta_raiz_nome = GDRIVE_CONFIG['root_folder']
         pasta_raiz_id = buscar_pasta(service, pasta_raiz_nome)
 
         if not pasta_raiz_id:
-            # Cria a pasta raiz automaticamente
             logging.info(f"Criando pasta raiz: {pasta_raiz_nome}")
             pasta_raiz_id = criar_pasta(service, pasta_raiz_nome)
             if not pasta_raiz_id:
                 logging.error(f"Nao foi possivel criar pasta raiz: {pasta_raiz_nome}")
                 return []
 
-    # Cria pasta do livro
-    pasta_livro_id = pasta_raiz_id
+    # Cria subpastas de categoria se necessario
+    _criar_estrutura_pastas(service, pasta_raiz_id)
+
+    # Se tem categoria, navega para a subpasta certa
+    pasta_destino_id = pasta_raiz_id
+    if categoria:
+        pasta_destino_id = obter_ou_criar_pasta(service, categoria, pasta_raiz_id)
+        if not pasta_destino_id:
+            pasta_destino_id = pasta_raiz_id  # Fallback para raiz
+
+    # Cria pasta do livro dentro da categoria
+    pasta_livro_id = pasta_destino_id
     if criar_pasta_livro:
-        pasta_livro_id = obter_ou_criar_pasta(service, nome_livro, pasta_raiz_id)
+        pasta_livro_id = obter_ou_criar_pasta(service, nome_livro, pasta_destino_id)
         if not pasta_livro_id:
             return []
 
@@ -355,7 +375,7 @@ def upload_audiobook(
     from utils import criar_progress_bar
 
     with criar_progress_bar(len(arquivos), "Upload Drive") as pbar:
-        for arquivo in sorted(arquivos):  # Ordenado por nome
+        for arquivo in sorted(arquivos):
             if arquivo and arquivo.exists() and arquivo.stat().st_size > 0:
 
                 def fazer_upload(arq=arquivo):
@@ -373,6 +393,22 @@ def upload_audiobook(
 
     logging.info(f"Upload concluido: {len(resultados)}/{len(arquivos)} arquivos")
     return resultados
+
+
+# Subpastas padrao para organizacao por tipo
+SUBPASTAS_CATEGORIAS = [
+    "Livros",
+    "Artigos e Noticias",
+    "Emails",
+    "Documentos",
+    "Favoritos",
+]
+
+
+def _criar_estrutura_pastas(service, pasta_raiz_id: str):
+    """Cria subpastas de categoria (se nao existirem)"""
+    for nome_pasta in SUBPASTAS_CATEGORIAS:
+        obter_ou_criar_pasta(service, nome_pasta, pasta_raiz_id)
 
 
 # ==================== INSTRUCOES MYPOD ====================

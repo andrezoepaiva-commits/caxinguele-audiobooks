@@ -1,0 +1,42 @@
+{
+  "manifest": {
+    "publishingInformation": {
+      "locales": {
+        "pt-BR": {
+          "name": "Meus Audiobooks",
+          "summary": "Biblioteca de audiobooks acessivel por voz",
+          "description": "Acesse seus livros, artigos e emails convertidos em audio. Diga seus pedidos e confirme com CAMBIO.",
+          "keywords": ["audiobook", "leitura", "acessibilidade", "livros"],
+          "examplePhrases": [
+            "Alexa, abre meus audiobooks",
+            "quais documentos tenho cambio",
+            "le o livro numero um cambio"
+          ]
+        }
+      },
+      "isAvailableWorldwide": false,
+      "testingInstructions": "Diga 'Alexa, abre meus audiobooks' para iniciar.",
+      "category": "BOOKS_AND_REFERENCE",
+      "distributionCountries": ["BR"]
+    },
+    "apis": {
+      "custom": {
+        "endpoint": {
+          "sourceDir": "lambda",
+          "uri": "SUBSTITUIR_PELO_ARN_DA_LAMBDA"
+        },
+        "interfaces": [
+          {
+            "type": "AUDIO_PLAYER"
+          }
+        ]
+      }
+    },
+    "manifestVersion": "1.0",
+    "permissions": [
+      {
+        "name": "alexa::profile:name:read"
+      }
+    ]
+  }
+}

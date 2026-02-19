@@ -25,16 +25,18 @@ def gerar_rss_livro(
     resultados_upload: List[Dict],
     nome_livro: str,
     pasta_saida: Path,
-    descricao: str = ""
+    descricao: str = "",
+    categoria: str = ""
 ) -> Path:
     """
-    Gera arquivo RSS para um livro.
+    Gera arquivo RSS para um livro/documento.
 
     Args:
         resultados_upload: Lista com dicts {nome, direct_url} dos capitulos
         nome_livro: Nome do livro (vira titulo do podcast)
         pasta_saida: Pasta onde salvar o arquivo .xml
         descricao: Descricao opcional do livro
+        categoria: Categoria do documento (Livro, Artigo, Email, etc.)
 
     Returns:
         Caminho do arquivo RSS gerado
@@ -54,7 +56,7 @@ def gerar_rss_livro(
 
     channel = ET.SubElement(rss, "channel")
 
-    # Informacoes do podcast (livro)
+    # Informacoes do podcast (livro/documento)
     ET.SubElement(channel, "title").text = nome_livro
     ET.SubElement(channel, "link").text = BASE_URL
     ET.SubElement(channel, "description").text = descricao or f"Audiobook: {nome_livro} - Projeto Caxinguele"
@@ -69,7 +71,23 @@ def gerar_rss_livro(
     ET.SubElement(img_block, "url").text = CAPA_URL
     ET.SubElement(img_block, "title").text = nome_livro
     ET.SubElement(img_block, "link").text = BASE_URL
-    ET.SubElement(channel, f"{{{ITUNES}}}category", {"text": "Books"})
+
+    # Categoria do documento (tag para filtro pela Skill Alexa)
+    itunes_category = "Books"
+    if categoria:
+        # Mapeia categoria interna para iTunes category
+        mapa_categorias = {
+            "Livros": "Books",
+            "Artigos e Noticias": "News",
+            "Emails": "Society & Culture",
+            "Documentos": "Education",
+        }
+        itunes_category = mapa_categorias.get(categoria, "Books")
+    ET.SubElement(channel, f"{{{ITUNES}}}category", {"text": itunes_category})
+
+    # Tag customizada com categoria interna (para a Custom Skill)
+    if categoria:
+        ET.SubElement(channel, "category").text = categoria
 
     # Episodios (capitulos)
     for i, resultado in enumerate(resultados_upload, 1):

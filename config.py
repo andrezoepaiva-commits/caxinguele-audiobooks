@@ -227,14 +227,38 @@ MYPOD_CONFIG = {
     "instructions_file": "README_MyPod.txt",
 }
 
+# ==================== PERFIS DE DESTINATÁRIO ====================
+
+# Perfis de usuário para o seletor "Enviar para:"
+PERFIS_USUARIOS = {
+    "eu": {
+        "nome": "Eu (André)",
+        "gdrive_root": "Audiobooks - Alexa",
+        "rss_repo": "caxinguele-audiobooks",
+    },
+    "amigo": {
+        "nome": "Meu Amigo",
+        "gdrive_root": "Audiobooks - Alexa",  # Mesma pasta (compartilhada via Household)
+        "rss_repo": "caxinguele-audiobooks",
+    },
+}
+
+DESTINATARIO_PADRAO = "eu"
+
+# ==================== TAMANHO MÁXIMO DE DOCUMENTOS ====================
+
+# Tamanho máximo aceito para qualquer formato (MB)
+MAX_DOC_SIZE_MB = 500
+
 # ==================== MENSAGENS DO SISTEMA ====================
 
 MESSAGES = {
     "welcome": """
 ===========================================================
-     PDF2Audiobook - Sistema Alexa para Cegos
+     Projeto Caxinguele - Audiobooks para Alexa
 
-  Converte PDFs em audiobooks acessiveis via voz
+  Converte documentos em audiobooks acessiveis via voz
+  Formatos: PDF, Word, EPUB, Email, Imagem e mais
 ===========================================================
     """,
 

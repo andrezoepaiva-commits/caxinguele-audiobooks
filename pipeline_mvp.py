@@ -1,11 +1,14 @@
 """
-Pipeline MVP - PDF para Audiobook Alexa
+Pipeline MVP - Documento para Audiobook Alexa
 Orquestrador principal do sistema
 
+Suporta: PDF, DOCX, EPUB, TXT, HTML, Email, Imagens e mais
+
 Uso:
-    python pipeline_mvp.py --pdf "caminho/para/livro.pdf"
-    python pipeline_mvp.py --pdf "livro.pdf" --voz francisca
-    python pipeline_mvp.py --pdf "livro.pdf" --no-upload
+    python pipeline_mvp.py --arquivo "caminho/para/livro.pdf"
+    python pipeline_mvp.py --arquivo "livro.epub" --voz francisca
+    python pipeline_mvp.py --arquivo "documento.docx" --no-upload
+    python pipeline_mvp.py --pdf "livro.pdf"  (compatibilidade)
 """
 
 import argparse
@@ -26,6 +29,8 @@ from utils import (
     carregar_checkpoint, limpar_checkpoint, notificar_conclusao
 )
 from pdf_processor import processar_pdf, dividir_capitulo_em_chunks
+from doc_processor import processar_documento, formato_suportado
+from doc_classifier import classificar_documento, TipoDocumento
 from tts_engine import processar_capitulos_paralelo, estimar_duracao_audio
 from cloud_uploader import upload_audiobook, gerar_instrucoes_mypod
 
@@ -35,14 +40,18 @@ from cloud_uploader import upload_audiobook, gerar_instrucoes_mypod
 def parse_args():
     """Parse argumentos da linha de comando"""
     parser = argparse.ArgumentParser(
-        description='Converte PDF em audiobook para Alexa',
+        description='Converte documentos em audiobook para Alexa',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Exemplos:
-  %(prog)s --pdf "Sapiens.pdf"
-  %(prog)s --pdf "livro.pdf" --voz camila
-  %(prog)s --pdf "livro.pdf" --no-upload
-  %(prog)s --pdf "livro.pdf" --output "meus_audiobooks/"
+  %(prog)s --arquivo "Sapiens.pdf"
+  %(prog)s --arquivo "livro.epub" --voz camila
+  %(prog)s --arquivo "documento.docx" --no-upload
+  %(prog)s --pdf "livro.pdf"  (compatibilidade)
+
+Formatos suportados:
+  PDF, DOCX, RTF, ODT, TXT, MD, EPUB, MOBI,
+  EML, MSG, HTML, JPG, PNG (OCR)
 
 Vozes disponíveis:
   francisca - Feminina, jovem, natural (padrão)
@@ -53,10 +62,17 @@ Vozes disponíveis:
     )
 
     parser.add_argument(
+        '--arquivo',
+        type=str,
+        default=None,
+        help='Caminho do documento (qualquer formato suportado)'
+    )
+
+    parser.add_argument(
         '--pdf',
         type=str,
-        required=True,
-        help='Caminho do arquivo PDF'
+        default=None,
+        help='Caminho do arquivo PDF (compatibilidade — use --arquivo)'
     )
 
     parser.add_argument(
@@ -98,7 +114,13 @@ Vozes disponíveis:
         help='Retomar processamento do checkpoint'
     )
 
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    # Valida que pelo menos um arquivo foi informado
+    if not args.arquivo and not args.pdf:
+        parser.error("Informe --arquivo ou --pdf")
+
+    return args
 
 
 # ==================== PIPELINE PRINCIPAL ====================
@@ -134,34 +156,46 @@ def executar_pipeline(args):
     # ──────────────────────────────────────────────────────────
 
     logging.info("=" * 60)
-    logging.info("ETAPA 1/5: Validação do PDF")
+    logging.info("ETAPA 1/5: Validação do Documento")
     logging.info("=" * 60)
 
-    caminho_pdf = Path(args.pdf)
-
-    # Valida
-    valido, mensagem = validar_pdf(caminho_pdf)
-    if not valido:
-        logging.error(f"❌ {mensagem}")
+    # Suporta --arquivo e --pdf (compatibilidade)
+    caminho_arquivo = args.arquivo or args.pdf
+    if not caminho_arquivo:
+        logging.error("Nenhum arquivo especificado. Use --arquivo ou --pdf")
         return False
 
-    logging.info(f"✅ {mensagem}")
+    caminho_doc = Path(caminho_arquivo)
+
+    # Valida existência
+    if not caminho_doc.exists():
+        logging.error(f"Arquivo não encontrado: {caminho_doc}")
+        return False
+
+    # Valida formato
+    if not formato_suportado(caminho_doc):
+        logging.error(f"Formato não suportado: {caminho_doc.suffix}")
+        return False
+
+    tamanho_mb = caminho_doc.stat().st_size / (1024 * 1024)
+    logging.info(f"Arquivo válido: {caminho_doc.name} ({tamanho_mb:.1f} MB)")
 
     # ──────────────────────────────────────────────────────────
-    # ETAPA 2: PROCESSAMENTO DO PDF
+    # ETAPA 2: PROCESSAMENTO DO DOCUMENTO
     # ──────────────────────────────────────────────────────────
 
     logging.info("")
     logging.info("=" * 60)
-    logging.info("ETAPA 2/5: Processamento do PDF")
+    logging.info("ETAPA 2/5: Processamento do Documento")
     logging.info("=" * 60)
 
     # Verifica se pode pular (checkpoint)
     livro = None
+    classificacao = None  # Resultado da detecção de tipo
     if checkpoint and checkpoint.get('etapa_concluida') >= 2:
-        logging.info("⏩ Etapa já concluída (checkpoint), pulando...")
-        logging.warning("⚠️  AVISO: --resume não salva objeto Livro no checkpoint")
-        logging.warning("          Por segurança, reprocessando PDF do zero...")
+        logging.info("Etapa já concluída (checkpoint), pulando...")
+        logging.warning("AVISO: --resume não salva objeto Livro no checkpoint")
+        logging.warning("       Por segurança, reprocessando do zero...")
         checkpoint = None  # Força reprocessamento
 
     if not checkpoint or checkpoint.get('etapa_concluida') < 2:
@@ -172,20 +206,29 @@ def executar_pipeline(args):
                 PDF_CONFIG['auto_ocr'] = False
                 logging.info("OCR automático desabilitado")
 
-            livro = processar_pdf(caminho_pdf)
+            # Usa processador multi-formato
+            livro = processar_documento(caminho_doc)
+
+            # Classifica tipo do documento
+            texto_amostra = ""
+            if livro.capitulos:
+                texto_amostra = livro.capitulos[0].texto[:2000]
+            classificacao = classificar_documento(caminho_doc, texto_amostra, livro.num_paginas)
+            logging.info(f"Tipo detectado: {classificacao}")
 
             # Salva checkpoint
             if ENABLE_CHECKPOINTS:
                 salvar_checkpoint(CHECKPOINT_FILE, {
-                    'etapa_atual': 'Processamento PDF',
+                    'etapa_atual': 'Processamento Documento',
                     'etapa_concluida': 2,
                     'progresso_percentual': 40,
-                    'pdf_path': str(caminho_pdf),
-                    'num_capitulos': len(livro.capitulos)
+                    'doc_path': str(caminho_doc),
+                    'num_capitulos': len(livro.capitulos),
+                    'tipo_documento': classificacao.tipo,
                 })
 
         except Exception as e:
-            logging.error(f"❌ Erro ao processar PDF: {e}")
+            logging.error(f"Erro ao processar documento: {e}")
             return False
 
     # ──────────────────────────────────────────────────────────
@@ -312,10 +355,16 @@ def executar_pipeline(args):
             logging.warning("=" * 60)
         else:
             try:
+                # Detecta categoria para organizar no Drive
+                categoria_drive = None
+                if classificacao:
+                    categoria_drive = classificacao.pasta_drive
+
                 resultados_upload = upload_audiobook(
                     arquivos=arquivos_audio,
                     nome_livro=livro.titulo,
-                    criar_pasta_livro=True
+                    criar_pasta_livro=True,
+                    categoria=categoria_drive
                 )
 
                 if not resultados_upload:
@@ -337,11 +386,12 @@ def executar_pipeline(args):
                         if not capa_path.exists():
                             capa_path = Path(__file__).parent / "capa_podcast.jpg"
 
-                        # Gera o XML do RSS
+                        # Gera o XML do RSS (com categoria para filtro)
                         arquivo_rss = gerar_rss_livro(
                             resultados_upload,
                             livro.titulo,
-                            pasta_saida
+                            pasta_saida,
+                            categoria=categoria_drive or ""
                         )
                         logging.info(f"[OK] RSS gerado: {arquivo_rss.name}")
 
@@ -351,8 +401,24 @@ def executar_pipeline(args):
                             capa_path if capa_path.exists() else None
                         )
                         logging.info(f"[OK] RSS publicado: {url_rss}")
-                        logging.info(f"[OK] Spotify vai atualizar automaticamente em alguns minutos")
-                        logging.info(f"[OK] Diga: 'Alexa, toca {livro.titulo} no Spotify'")
+                        logging.info(f"[OK] Amazon Music vai atualizar automaticamente")
+
+                        # Gera indice.json para a Custom Skill Alexa
+                        try:
+                            from indice_generator import adicionar_ao_indice
+                            arquivo_indice = pasta_saida.parent / "indice.json"
+                            for resultado in resultados_upload:
+                                adicionar_ao_indice(arquivo_indice, {
+                                    "titulo": resultado.get("nome", livro.titulo),
+                                    "url_audio": resultado.get("direct_url", ""),
+                                    "categoria": categoria_drive or "Documentos",
+                                    "data": __import__("datetime").datetime.now().strftime("%Y-%m-%d"),
+                                })
+                            logging.info(f"[OK] Indice Alexa atualizado: {arquivo_indice.name}")
+                        except Exception as ei:
+                            logging.warning(f"Indice: {ei}")
+
+                        logging.info(f"[OK] Diga: 'Alexa, abre meus audiobooks'")
 
                     except Exception as e:
                         logging.warning(f"RSS/GitHub: {e} - verifique manualmente")
@@ -413,10 +479,11 @@ def executar_pipeline_completo(
     """
     Funcao simplificada para a GUI chamar.
     Executa o pipeline completo com callback de progresso.
+    Aceita qualquer formato de documento (não apenas PDF).
 
     Args:
-        caminho_pdf: Caminho do PDF
-        nome_livro: Nome do livro
+        caminho_pdf: Caminho do documento (nome mantido por compatibilidade)
+        nome_livro: Nome do livro/documento
         fazer_upload: Se True, sobe para Google Drive
         publicar_rss: Se True, gera RSS e sobe para GitHub
         callback_progresso: Funcao opcional para reportar progresso
@@ -441,7 +508,8 @@ def executar_pipeline_completo(
 
     # Monta argumentos simulados para o pipeline
     args = argparse.Namespace(
-        pdf=caminho_pdf,
+        arquivo=caminho_pdf,  # Aceita qualquer formato agora
+        pdf=None,
         voz="thalita",
         output=None,
         no_upload=not fazer_upload,
@@ -490,13 +558,14 @@ def main():
     )
 
     # Log inicial
-    logging.info(f"📚 PDF2Audiobook MVP")
-    logging.info(f"📄 Arquivo: {args.pdf}")
-    logging.info(f"🎙️  Voz: {args.voz}")
+    arquivo = args.arquivo or args.pdf
+    logging.info(f"Projeto Caxinguele v2")
+    logging.info(f"Arquivo: {arquivo}")
+    logging.info(f"Voz: {args.voz}")
     if args.no_upload:
-        logging.info(f"⚠️  Upload desabilitado")
+        logging.info(f"Upload desabilitado")
     if args.resume:
-        logging.info(f"📦 Modo resume ativado")
+        logging.info(f"Modo resume ativado")
 
     # Executa pipeline
     try:
