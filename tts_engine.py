@@ -121,7 +121,7 @@ def converter_texto_para_audio(
     Args:
         texto: Texto a converter
         arquivo_saida: Path do arquivo MP3 de saída
-        voz: Nome da voz
+        voz: Nome da voz (chave como "francisca" ou nome completo como "pt-BR-FranciscaNeural")
         rate: Velocidade
         volume: Volume
         max_tentativas: Número máximo de tentativas
@@ -132,12 +132,18 @@ def converter_texto_para_audio(
     arquivo_saida = Path(arquivo_saida)
     arquivo_saida.parent.mkdir(parents=True, exist_ok=True)
 
+    # Resolve a voz: se for chave (ex: "francisca"), converte para nome completo
+    if voz in VOZES_PT_BR:
+        voz_completa = VOZES_PT_BR[voz]
+    else:
+        voz_completa = voz  # Assumir que já é nome completo
+
     # Sistema de retry com fallback de servidores
     for tentativa in range(1, max_tentativas + 1):
         try:
             # Executa conversão assíncrona
             sucesso = asyncio.run(
-                _converter_tts_async(texto, voz, arquivo_saida, rate, volume)
+                _converter_tts_async(texto, voz_completa, arquivo_saida, rate, volume)
             )
 
             if sucesso and arquivo_saida.exists():

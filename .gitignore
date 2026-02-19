@@ -21,3 +21,4 @@ venv/
 # PDFs pessoais
 *.pdf
 !exemplo_teste.pdf
+service_account.json

@@ -49,8 +49,8 @@ VOZES_PT_BR = {
     "duarte": "pt-PT-DuarteNeural",        # Masculino, profissional
 }
 
-# Voz padrão (recomendada)
-VOZ_PADRAO = VOZES_PT_BR["francisca"]
+# Voz padrão (recomendada) - armazenar como CHAVE, não como valor
+VOZ_PADRAO = "francisca"
 
 # ==================== SERVIDORES EDGE-TTS (FALLBACK) ====================
 

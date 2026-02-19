@@ -189,45 +189,87 @@ def detectar_capitulos_por_padroes(pdf_doc: fitz.Document) -> List[Dict]:
     Quando o PDF não tem TOC nativo, tenta detectar capítulos
     procurando por padrões como "Capítulo 1", "CAPÍTULO I", etc.
 
+    Estratégia:
+    1. Pula primeiras 2 páginas (capa, índice)
+    2. Procura por padrões fortes (com ":" ou "Capítulo")
+    3. Fallback: padrões fracos (números + ponto)
+
     Args:
         pdf_doc: Documento PyMuPDF
 
     Returns:
         Lista de capítulos detectados
     """
-    # Padrões comuns para capítulos
-    padroes = [
-        r'^Capítulo\s+(\d+|[IVX]+)',  # Capítulo 1, Capítulo I
-        r'^CAPÍTULO\s+(\d+|[IVX]+)',  # CAPÍTULO 1
-        r'^Cap\.\s+(\d+)',            # Cap. 1
-        r'^Chapter\s+(\d+|[IVX]+)',   # Chapter 1 (inglês)
-        r'^(\d+)\.\s+[A-Z]',          # 1. Título Capitalizado
+    capitulos = []
+
+    # Padrões fortes (provavelmente são capítulos reais)
+    padroes_fortes = [
+        r'^Capítulo\s+(\d+|[IVX]+):',  # Capítulo 1: Título
+        r'^CAPÍTULO\s+(\d+|[IVX]+):',  # CAPÍTULO 1: Título
+        r'^Cap\.\s+(\d+):',            # Cap. 1: Título
+        r'^Chapter\s+(\d+|[IVX]+):',   # Chapter 1: Título (inglês)
+        r'^CAPÍTULO\s+(\d+)',          # CAPÍTULO 1 (mesmo sem dois pontos)
+        r'^Capítulo\s+(\d+)',          # Capítulo 1 (mesmo sem dois pontos)
     ]
 
-    capitulos = []
-    num_capitulo = 1
+    # Padrões fracos (podem estar no índice também)
+    padroes_fracos = [
+        r'^Capítulo\s+(\d+|[IVX]+)',   # Capítulo 1
+        r'^(\d+)\.\s+[A-Z]',           # 1. Título
+    ]
 
+    # Estratégia 1: Procurar por padrões fortes em todas as páginas
     for num_pagina in range(len(pdf_doc)):
         pagina = pdf_doc[num_pagina]
         texto = pagina.get_text()
 
-        # Verifica primeiras linhas da página
-        linhas = texto.split('\n')[:5]  # Primeiras 5 linhas
+        # Procura no texto completo (não só primeiras linhas)
+        # para capturar capítulos que podem estar quebrados
+        linhas = texto.split('\n')[:15]  # Aumentar para 15 linhas
 
         for linha in linhas:
             linha = linha.strip()
-            for padrao in padroes:
+            # Remove múltiplos espaços (pode ter espaçamento do PDF)
+            linha = re.sub(r'\s+', ' ', linha)
+
+            for padrao in padroes_fortes:
                 if re.match(padrao, linha, re.IGNORECASE):
                     capitulos.append({
                         'nivel': 1,
                         'titulo': linha,
                         'pagina': num_pagina
                     })
-                    num_capitulo += 1
+                    break
+
+    # Se encontrou capítulos fortes, retorna
+    if capitulos:
+        logging.info(f"Detectados {len(capitulos)} capítulos por padrões FORTES de texto")
+        return capitulos
+
+    # Estratégia 2: Padrões fracos (em todas as páginas)
+    for num_pagina in range(len(pdf_doc)):
+        pagina = pdf_doc[num_pagina]
+        texto = pagina.get_text()
+
+        linhas = texto.split('\n')[:15]
+
+        for linha in linhas:
+            linha = linha.strip()
+            linha = re.sub(r'\s+', ' ', linha)
+
+            for padrao in padroes_fracos:
+                if re.match(padrao, linha, re.IGNORECASE):
+                    # Evita duplicatas
+                    if not any(c['titulo'] == linha for c in capitulos):
+                        capitulos.append({
+                            'nivel': 1,
+                            'titulo': linha,
+                            'pagina': num_pagina
+                        })
                     break
 
     if capitulos:
-        logging.info(f"Detectados {len(capitulos)} capítulos por padrões de texto")
+        logging.info(f"Detectados {len(capitulos)} capítulos por padrões FRACOS de texto")
     else:
         logging.warning("Não foi possível detectar capítulos automaticamente")
 
