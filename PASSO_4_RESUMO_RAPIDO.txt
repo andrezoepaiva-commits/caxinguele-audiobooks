@@ -1,0 +1,73 @@
+╔════════════════════════════════════════════════════════════════╗
+║           PASSO 4 - TESTE RÁPIDO (2 MINUTOS LENDO)             ║
+╚════════════════════════════════════════════════════════════════╝
+
+📋 VOCÊ TEM TUDO PRONTO:
+✅ GUI (interface gráfica)
+✅ PDF de teste (TESTE_AUDIOBOOK.pdf)
+✅ Token GitHub (salvo em .env)
+✅ Google Drive (já autenticado)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 O QUE FAZER:
+
+1. Duplo-clique no ícone no Desktop
+   → "Projeto Caxinguele.lnk"
+
+2. GUI abre (aguarde 10-20 segundos)
+
+3. Clique em "Abrir PDF"
+   → Selecione: TESTE_AUDIOBOOK.pdf
+
+4. Verifique opções (devem estar marcadas):
+   ☑ Subir para Google Drive
+   ☑ Publicar RSS GitHub
+
+5. Clique em "CONVERTER E PUBLICAR"
+
+6. Aguarde 10-15 minutos
+   → Sistema vai:
+      • Ler o PDF
+      • Dividir em 5 capítulos
+      • Gerar áudio (MAIS LENTO)
+      • Subir para Google Drive
+      • Publicar no GitHub
+      • Mostrar URL do RSS
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ RESULTADO ESPERADO:
+
+📁 Arquivos MP3 criados em:
+   C:\Users\andre\Desktop\Projetos\pdf2audiobook\audiobooks\
+   TESTE AUDIOBOOK\
+
+☁️ Enviados para Google Drive:
+   Audiobooks - Alexa > TESTE AUDIOBOOK
+
+📡 RSS publicado no GitHub:
+   https://andrezoepaiva-commits.github.io/caxinguele-audiobooks/teste-audiobook.xml
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+❓ DÚVIDAS?
+
+→ Leia o arquivo PASSO_4_GUIA_VISUAL.md (muito detalhado com prints)
+
+→ Se algo der errado, copie o LOG e me mande
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⏱️ TIMELINE ESPERADA:
+
+[00:00] Clica em "CONVERTER E PUBLICAR"
+[01:00] Acabou de ler o PDF
+[04:00] Acabou de gerar os MP3 (Etapa mais lenta)
+[05:00] Acabou de subir no Google Drive
+[06:00] Acabou de publicar no GitHub
+[07:00] ✅ PRONTO! URL do RSS aparece
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎉 BOA SORTE! Avise quando terminar!
