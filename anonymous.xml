@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" version="2.0">
+  <channel>
+    <title>(anonymous)</title>
+    <link>https://andrezoepaiva-commits.github.io/caxinguele-audiobooks</link>
+    <description>Audiobook: (anonymous) - Projeto Caxinguele</description>
+    <language>pt-BR</language>
+    <itunes:author>Projeto Caxinguele</itunes:author>
+    <itunes:owner>
+      <itunes:name>Projeto Caxinguele</itunes:name>
+      <itunes:email>andrezoepaiva@gmail.com</itunes:email>
+    </itunes:owner>
+    <itunes:explicit>false</itunes:explicit>
+    <itunes:image href="https://andrezoepaiva-commits.github.io/caxinguele-audiobooks/capa_podcast.jpg" />
+    <image>
+      <url>https://andrezoepaiva-commits.github.io/caxinguele-audiobooks/capa_podcast.jpg</url>
+      <title>(anonymous)</title>
+      <link>https://andrezoepaiva-commits.github.io/caxinguele-audiobooks</link>
+    </image>
+    <itunes:category text="Books" />
+    <item>
+      <title>01. CAPÍTULO 1 Introdução ao Mundo dos</title>
+      <description>Capitulo 1 de (anonymous)</description>
+      <guid>(anonymous)-cap01</guid>
+      <pubDate>Thu, 19 Feb 2026 14:22:15 +0000</pubDate>
+      <itunes:episode>1</itunes:episode>
+      <itunes:episodeType>full</itunes:episodeType>
+      <enclosure url="https://drive.google.com/uc?export=download&amp;id=1y8yWSKKHjnIDf29MDMR-Xr1lI9aABRI1" type="audio/mpeg" length="0" />
+    </item>
+    <item>
+      <title>02. CAPÍTULO 2 Benefícios e Aplicações Práticas</title>
+      <description>Capitulo 2 de (anonymous)</description>
+      <guid>(anonymous)-cap02</guid>
+      <pubDate>Thu, 19 Feb 2026 14:22:15 +0000</pubDate>
+      <itunes:episode>2</itunes:episode>
+      <itunes:episodeType>full</itunes:episodeType>
+      <enclosure url="https://drive.google.com/uc?export=download&amp;id=1Uv0nS5yA2iATYZwxykO6UldXIae0Wzq2" type="audio/mpeg" length="0" />
+    </item>
+    <item>
+      <title>03. CAPÍTULO 3 Tecnologia por Trás do Áudio</title>
+      <description>Capitulo 3 de (anonymous)</description>
+      <guid>(anonymous)-cap03</guid>
+      <pubDate>Thu, 19 Feb 2026 14:22:15 +0000</pubDate>
+      <itunes:episode>3</itunes:episode>
+      <itunes:episodeType>full</itunes:episodeType>
+      <enclosure url="https://drive.google.com/uc?export=download&amp;id=1KEHmdsuTBoq_RE29SN_y8s09csTcch44" type="audio/mpeg" length="0" />
+    </item>
+    <item>
+      <title>04. CAPÍTULO 4 Publicação e Distribuição</title>
+      <description>Capitulo 4 de (anonymous)</description>
+      <guid>(anonymous)-cap04</guid>
+      <pubDate>Thu, 19 Feb 2026 14:22:15 +0000</pubDate>
+      <itunes:episode>4</itunes:episode>
+      <itunes:episodeType>full</itunes:episodeType>
+      <enclosure url="https://drive.google.com/uc?export=download&amp;id=1fptJJVh7wBGmFY2EHOkntujcdRh9xpUE" type="audio/mpeg" length="0" />
+    </item>
+    <item>
+      <title>05. CAPÍTULO 5 O Futuro dos Audiobooks</title>
+      <description>Capitulo 5 de (anonymous)</description>
+      <guid>(anonymous)-cap05</guid>
+      <pubDate>Thu, 19 Feb 2026 14:22:15 +0000</pubDate>
+      <itunes:episode>5</itunes:episode>
+      <itunes:episodeType>full</itunes:episodeType>
+      <enclosure url="https://drive.google.com/uc?export=download&amp;id=1pk6bOWAq4cCWkUkFcUvH64v_JuB7WVqH" type="audio/mpeg" length="0" />
+    </item>
+  </channel>
+</rss>
