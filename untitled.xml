@@ -18,14 +18,15 @@
       <link>https://andrezoepaiva-commits.github.io/caxinguele-audiobooks</link>
     </image>
     <itunes:category text="Books" />
+    <category>Livros</category>
     <item>
       <title>01. Parte 1</title>
       <description>Capitulo 1 de untitled</description>
       <guid>untitled-cap01</guid>
-      <pubDate>Tue, 10 Feb 2026 18:00:34 +0000</pubDate>
+      <pubDate>Fri, 20 Feb 2026 15:28:23 +0000</pubDate>
       <itunes:episode>1</itunes:episode>
       <itunes:episodeType>full</itunes:episodeType>
-      <enclosure url="https://drive.google.com/uc?export=download&amp;id=17eqSz880rU63Cf60q5nN8dHF0a5RjP4t" type="audio/mpeg" length="0" />
+      <enclosure url="https://drive.google.com/uc?export=download&amp;id=1pxrg48yGl1H-9O5THuRXUFhPf1fFw2S9" type="audio/mpeg" length="0" />
     </item>
   </channel>
 </rss>
