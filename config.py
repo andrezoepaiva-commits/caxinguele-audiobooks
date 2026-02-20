@@ -37,16 +37,13 @@ CHECKPOINT_DIR.mkdir(exist_ok=True)
 
 # ==================== VOZES TTS (Edge-TTS) ====================
 
-# Vozes neurais português disponíveis
+# Vozes neurais português (apenas BRASIL)
 VOZES_PT_BR = {
     # Brasil (sotaque brasileiro)
     "francisca": "pt-BR-FranciscaNeural",  # Feminina, jovem, natural
     "camila": "pt-BR-CamilaNeural",        # Feminina, madura, profissional
     "antonio": "pt-BR-AntonioNeural",      # Masculino, claro
     "thalita": "pt-BR-ThalitaMultilingualNeural",  # Feminina, suave
-    # Portugal (sotaque português)
-    "raquel": "pt-PT-RaquelNeural",        # Feminina, clara
-    "duarte": "pt-PT-DuarteNeural",        # Masculino, profissional
 }
 
 # Voz padrão (recomendada) - armazenar como CHAVE, não como valor
