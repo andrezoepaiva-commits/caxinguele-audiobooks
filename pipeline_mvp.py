@@ -415,6 +415,33 @@ def executar_pipeline(args):
                                     "data": __import__("datetime").datetime.now().strftime("%Y-%m-%d"),
                                 })
                             logging.info(f"[OK] Indice Alexa atualizado: {arquivo_indice.name}")
+
+                            # Publica indice.json na raiz do repo para GitHub Pages
+                            try:
+                                import shutil
+                                import subprocess as _sp
+                                raiz_repo = Path(__file__).parent
+                                indice_raiz = raiz_repo / "indice.json"
+                                shutil.copy2(arquivo_indice, indice_raiz)
+                                _sp.run(
+                                    ["git", "add", "indice.json"],
+                                    cwd=raiz_repo, check=True,
+                                    capture_output=True
+                                )
+                                _sp.run(
+                                    ["git", "commit", "-m", "Atualiza indice.json (novo audiobook)"],
+                                    cwd=raiz_repo, check=True,
+                                    capture_output=True
+                                )
+                                _sp.run(
+                                    ["git", "push"],
+                                    cwd=raiz_repo, check=True,
+                                    capture_output=True
+                                )
+                                logging.info("[OK] indice.json publicado no GitHub Pages")
+                            except Exception as eg:
+                                logging.warning(f"GitHub Pages (indice): {eg}")
+
                         except Exception as ei:
                             logging.warning(f"Indice: {ei}")
 
