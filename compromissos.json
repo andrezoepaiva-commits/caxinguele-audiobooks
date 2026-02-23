@@ -1,0 +1,38 @@
+[
+  {
+    "id": "72855450",
+    "titulo": "Consulta médica — Dr. Ferreira",
+    "data": "23/02/2026",
+    "hora": "14:00",
+    "descricao": "Checkup anual. Levar exames de sangue.",
+    "criado_em": "22/02/2026 17:57",
+    "editado_em": ""
+  },
+  {
+    "id": "d84668b0",
+    "titulo": "Compras no supermercado",
+    "data": "22/02/2026",
+    "hora": "15:30",
+    "descricao": "Leite, pão, ovos, frutas.",
+    "criado_em": "22/02/2026 17:57",
+    "editado_em": ""
+  },
+  {
+    "id": "6d44d728",
+    "titulo": "Palestra sobre acessibilidade",
+    "data": "01/03/2026",
+    "hora": "19:00",
+    "descricao": "Evento online — link será enviado por email.",
+    "criado_em": "22/02/2026 17:57",
+    "editado_em": ""
+  },
+  {
+    "id": "05f5c6d6",
+    "titulo": "Aniversário da Mariana",
+    "data": "25/02/2026",
+    "hora": "18:00",
+    "descricao": "Lembrar de ligar para ela.",
+    "criado_em": "22/02/2026 17:57",
+    "editado_em": ""
+  }
+]

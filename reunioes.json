@@ -1,0 +1,35 @@
+[
+  {
+    "id": "6fec06e5",
+    "titulo": "Planejamento Caxinguelê — Q1 2026",
+    "data": "15/02/2026",
+    "hora": "19:00",
+    "participantes": "André, Amigo, Equipe",
+    "resumo": "Planejamento das atividades do primeiro trimestre. Definidas prioridades: skill Alexa, acessibilidade e novos conteúdos.",
+    "transcricao": "André: Olá a todos. Vamos começar com um resumo das metas... Amigo: Concordo, precisamos priorizar a acessibilidade...",
+    "criado_em": "22/02/2026 21:55",
+    "editado_em": ""
+  },
+  {
+    "id": "49d1d4a3",
+    "titulo": "Revisão de Conteúdo — Fevereiro",
+    "data": "19/02/2026",
+    "hora": "20:00",
+    "participantes": "André, Amigo",
+    "resumo": "Revisão dos audiobooks publicados. Feedback positivo sobre velocidade de entrega. Próximo: integração com Google Calendar.",
+    "transcricao": "André: Os audiobooks estão funcionando bem... Amigo: Sim, adorei a voz da Thalita...",
+    "criado_em": "22/02/2026 21:55",
+    "editado_em": ""
+  },
+  {
+    "id": "d5a34b6c",
+    "titulo": "Reunião Semanal — Próxima",
+    "data": "27/02/2026",
+    "hora": "19:30",
+    "participantes": "André, Amigo, Equipe",
+    "resumo": "Pauta: testes de voz, novos menus, feedback da Alexa.",
+    "transcricao": "",
+    "criado_em": "22/02/2026 21:55",
+    "editado_em": ""
+  }
+]

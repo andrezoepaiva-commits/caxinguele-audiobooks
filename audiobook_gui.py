@@ -15,14 +15,28 @@ import threading
 import queue
 import sys
 import time
+import os
 from pathlib import Path
 from datetime import datetime
+
+# Esconder janela preta do console no Windows
+if sys.platform == "win32":
+    try:
+        import ctypes
+        console_window = ctypes.windll.kernel32.GetConsoleWindow()
+        if console_window:
+            ctypes.windll.user32.ShowWindow(console_window, 0)
+    except Exception:
+        pass
 
 sys.path.insert(0, str(Path(__file__).parent))
 
 from doc_processor import FILTRO_EXTENSOES, formato_suportado
 from doc_classifier import classificar_documento, ICONES_TIPO, NOMES_TIPO, obter_opcoes_tipo_gui
 from config import PERFIS_USUARIOS, DESTINATARIO_PADRAO
+from labirinto_ui import abrir_labirinto
+from analytics_manager import abrir_analytics, registrar_envio
+from gmail_monitor import abrir_verificar_emails
 
 # ==================== CORES ====================
 
@@ -54,7 +68,7 @@ ETAPAS = [
     "Lendo Doc",
     "Processando",
     "Gerando Audio",
-    "Google Drive",
+    "Enviando p/ Google Drive",
     "Publicando",
 ]
 
@@ -81,6 +95,7 @@ class AudiobookGUI:
         self._construir_interface()
         self._configurar_drag_drop()
         self._verificar_sistema_async()
+        self._iniciar_daemon_gmail()
         self.root.after(100, self._processar_fila)
 
     # ──────────────────────────── INTERFACE ────────────────────────────
@@ -158,11 +173,11 @@ class AudiobookGUI:
         for widget in [self.frame_drop, self.label_drop_icone, self.label_arquivo, self.label_tipo]:
             widget.bind("<Button-1>", lambda e: self._selecionar_arquivo())
 
-        # Botoes: Abrir + Guia para Alexa
+        # Botão principal: Enviar Documento
         frame_btn_abrir = tk.Frame(col_esq, bg=C["bg"])
         frame_btn_abrir.pack(fill="x", pady=(4, 0))
 
-        tk.Button(frame_btn_abrir, text="  Abrir Documento  ",
+        tk.Button(frame_btn_abrir, text="  Enviar Documento  ",
                   command=self._selecionar_arquivo,
                   bg=C["acento"], fg="white",
                   font=("Segoe UI", 10, "bold"),
@@ -171,19 +186,6 @@ class AudiobookGUI:
                   activebackground="#5a52e0",
                   activeforeground="white"
                   ).pack(side="right")
-
-        # Botao especial: converter guia de operacao para MP3
-        self.btn_guia = tk.Button(
-            frame_btn_abrir,
-            text="Guia p/ Alexa",
-            command=self._converter_guia_para_mp3,
-            bg=C["aviso"], fg=C["bg"],
-            font=("Segoe UI", 9, "bold"),
-            relief="flat", cursor="hand2",
-            padx=6, pady=5,
-            activebackground="#e6b800"
-        )
-        self.btn_guia.pack(side="right", padx=(0, 8))
 
         # -- NOME --
         self._secao(col_esq, "2   Nome  (aparece na Alexa)")
@@ -197,37 +199,10 @@ class AudiobookGUI:
         )
         self.entry_nome.pack(fill="x", ipady=8, pady=(4, 0))
 
-        # -- OPCOES + DESTINATARIO --
-        self._secao(col_esq, "3   Opcoes")
-
-        frame_ops = tk.Frame(col_esq, bg=C["bg"])
-        frame_ops.pack(fill="x", pady=(4, 0))
-
+        # -- OPCOES (sempre ativas, sem jargao tecnico) --
         self.var_drive = tk.BooleanVar(value=True)
         self.var_github = tk.BooleanVar(value=True)
-
-        self._checkbox(frame_ops, "Subir para Google Drive", self.var_drive)
-        self._checkbox(frame_ops, "Publicar RSS no GitHub", self.var_github)
-
-        # Seletor de destinatario
-        frame_dest = tk.Frame(col_esq, bg=C["bg"])
-        frame_dest.pack(fill="x", pady=(8, 0))
-
-        tk.Label(frame_dest, text="Enviar para:",
-                 font=("Segoe UI", 10),
-                 bg=C["bg"], fg=C["texto2"]).pack(side="left")
-
-        self.var_destinatario = tk.StringVar(value=DESTINATARIO_PADRAO)
-        for chave, perfil in PERFIS_USUARIOS.items():
-            tk.Radiobutton(
-                frame_dest, text=perfil["nome"],
-                variable=self.var_destinatario, value=chave,
-                bg=C["bg"], fg=C["texto"],
-                selectcolor=C["entrada"],
-                activebackground=C["bg"],
-                font=("Segoe UI", 10),
-                cursor="hand2"
-            ).pack(side="left", padx=(10, 0))
+        self.var_destinatario = tk.StringVar(value="amigo")
 
         # -- BOTAO --
         tk.Frame(col_esq, bg=C["bg"], height=10).pack()
@@ -245,6 +220,55 @@ class AudiobookGUI:
         )
         self.btn_converter.pack(fill="x")
 
+        # Botões secundários — linha 1
+        frame_secundario1 = tk.Frame(col_esq, bg=C["bg"])
+        frame_secundario1.pack(fill="x", pady=(6, 0))
+
+        tk.Button(frame_secundario1, text="Labirinto de Números",
+                  command=self._abrir_labirinto,
+                  bg=C["borda"], fg=C["texto"],
+                  font=("Segoe UI", 10, "bold"),
+                  relief="flat", cursor="hand2",
+                  padx=12, pady=6,
+                  activebackground=C["entrada"],
+                  activeforeground=C["texto"]
+                  ).pack(side="left")
+
+        tk.Button(frame_secundario1, text="Analytics",
+                  command=self._abrir_analytics,
+                  bg=C["borda"], fg=C["texto"],
+                  font=("Segoe UI", 10, "bold"),
+                  relief="flat", cursor="hand2",
+                  padx=12, pady=6,
+                  activebackground=C["entrada"],
+                  activeforeground=C["texto"]
+                  ).pack(side="left", padx=(6, 0))
+
+        tk.Button(frame_secundario1, text="Histórico",
+                  command=self._abrir_historico,
+                  bg=C["borda"], fg=C["texto"],
+                  font=("Segoe UI", 10, "bold"),
+                  relief="flat", cursor="hand2",
+                  padx=12, pady=6,
+                  activebackground=C["entrada"],
+                  activeforeground=C["texto"]
+                  ).pack(side="left", padx=(6, 0))
+
+        # Botões secundários — linha 2
+        frame_secundario2 = tk.Frame(col_esq, bg=C["bg"])
+        frame_secundario2.pack(fill="x", pady=(6, 0))
+
+        tk.Button(frame_secundario2, text="Gerenciar Equipe",
+                  command=self._abrir_gerenciar_equipe,
+                  bg=C["borda"], fg=C["texto"],
+                  font=("Segoe UI", 10, "bold"),
+                  relief="flat", cursor="hand2",
+                  padx=12, pady=6,
+                  activebackground=C["entrada"],
+                  activeforeground=C["texto"]
+                  ).pack(side="left", padx=(6, 0))
+
+
         # -- PROGRESSO --
         frame_prog = tk.Frame(col_esq, bg=C["bg"])
         frame_prog.pack(fill="x", pady=(8, 0))
@@ -254,7 +278,7 @@ class AudiobookGUI:
         style.configure("cax.Horizontal.TProgressbar",
                         troughcolor=C["borda"],
                         background=C["acento"],
-                        thickness=6)
+                        thickness=14)
 
         self.barra_var = tk.IntVar(value=0)
         self.barra = ttk.Progressbar(frame_prog,
@@ -267,8 +291,8 @@ class AudiobookGUI:
         frame_info = tk.Frame(col_esq, bg=C["bg"])
         frame_info.pack(fill="x", pady=(5, 0))
 
-        self.label_status = tk.Label(frame_info, text="Aguardando...",
-                                     font=("Segoe UI", 9),
+        self.label_status = tk.Label(frame_info, text="Pronto para converter",
+                                     font=("Segoe UI", 10, "bold"),
                                      bg=C["bg"], fg=C["texto2"], anchor="w")
         self.label_status.pack(side="left")
 
@@ -282,72 +306,7 @@ class AudiobookGUI:
                                     bg=C["bg"], fg=C["texto2"], anchor="e")
         self.label_tempo.pack(side="right")
 
-        # -- RSS URL -- (aparece apos conversao)
-        self.frame_rss = tk.Frame(col_esq, bg=C["entrada"],
-                                  highlightbackground=C["ok"],
-                                  highlightthickness=1)
-
-        frame_rss_inner = tk.Frame(self.frame_rss, bg=C["entrada"])
-        frame_rss_inner.pack(fill="x", padx=10, pady=8)
-
-        tk.Label(frame_rss_inner, text="RSS gerado - siga os passos abaixo:",
-                 font=("Segoe UI", 8, "bold"),
-                 bg=C["entrada"], fg=C["ok"]).pack(anchor="w")
-
-        tk.Label(frame_rss_inner, text="1. Abra o site do Amazon Music:",
-                 font=("Segoe UI", 8),
-                 bg=C["entrada"], fg=C["texto2"]).pack(anchor="w", pady=(6, 0))
-
-        frame_amazon_url = tk.Frame(frame_rss_inner, bg=C["entrada"])
-        frame_amazon_url.pack(fill="x", pady=(2, 0))
-
-        entry_amazon = tk.Entry(
-            frame_amazon_url,
-            font=("Consolas", 8),
-            bg=C["log_bg"], fg=C["ok"],
-            relief="flat", bd=0
-        )
-        entry_amazon.insert(0, "podcasters.amazon.com")
-        entry_amazon.bind("<Key>", lambda e: "break")
-        entry_amazon.pack(side="left", fill="x", expand=True, ipady=5, padx=(0, 6))
-
-        tk.Button(frame_amazon_url, text="Copiar",
-                  command=lambda: (self.root.clipboard_clear(), self.root.clipboard_append("https://podcasters.amazon.com")),
-                  bg=C["aviso"], fg=C["bg"],
-                  font=("Segoe UI", 8, "bold"),
-                  relief="flat", cursor="hand2",
-                  padx=8, pady=3,
-                  activebackground="#e6b800"
-                  ).pack(side="right")
-
-        tk.Label(frame_rss_inner, text="2. Cole o RSS do documento convertido:",
-                 font=("Segoe UI", 8),
-                 bg=C["entrada"], fg=C["texto2"]).pack(anchor="w", pady=(8, 0))
-
-        frame_rss_url = tk.Frame(frame_rss_inner, bg=C["entrada"])
-        frame_rss_url.pack(fill="x", pady=(2, 0))
-
-        self.entry_rss = tk.Entry(
-            frame_rss_url,
-            font=("Consolas", 8),
-            bg=C["log_bg"], fg=C["ok"],
-            insertbackground=C["ok"],
-            relief="flat", bd=0
-        )
-        self.entry_rss.bind("<Key>", lambda e: "break")
-        self.entry_rss.pack(side="left", fill="x", expand=True, ipady=5, padx=(0, 6))
-
-        tk.Button(frame_rss_url, text="Copiar",
-                  command=self._copiar_rss,
-                  bg=C["ok"], fg=C["bg"],
-                  font=("Segoe UI", 8, "bold"),
-                  relief="flat", cursor="hand2",
-                  padx=8, pady=3,
-                  activebackground="#35c07a"
-                  ).pack(side="right")
-
-        self.frame_rss.pack(fill="x", pady=(8, 0))
-        self.frame_rss.pack_forget()
+        # Placeholder para referencia (removido: antigo RSS/Amazon Music section)
 
         # -- LOG --
         self.frame_log_header = tk.Frame(col_esq, bg=C["bg"])
@@ -405,7 +364,7 @@ class AudiobookGUI:
         footer = tk.Frame(self.root, bg=C["painel"], pady=7)
         footer.pack(fill="x", side="bottom")
         tk.Label(footer,
-                 text="Projeto Caxinguele v2  |  Voz: Thalita (pt-BR)  |  Drive + Amazon Music + Alexa",
+                 text="Projeto Caxinguele v2  |  Voz: Thalita (pt-BR)  |  Skill Alexa: Meus Audiobooks",
                  font=("Segoe UI", 8), bg=C["painel"], fg=C["texto2"]).pack()
 
     # ──────────────────────────── DRAG AND DROP ────────────────────────────
@@ -575,8 +534,7 @@ class AudiobookGUI:
         self._escrever_log(f"Arquivo : {self.arquivo_selecionado.name}", "dim")
         if self.tipo_detectado:
             self._escrever_log(f"Tipo    : {self.tipo_detectado.icone} {self.tipo_detectado.nome}", "dim")
-        dest = PERFIS_USUARIOS.get(self.var_destinatario.get(), {}).get("nome", "Eu")
-        self._escrever_log(f"Destino : {dest}  |  Drive={self.var_drive.get()}  GitHub={self.var_github.get()}", "dim")
+        self._escrever_log("Destino : Alexa do Amigo", "dim")
         self._atualizar_tempo()
 
         threading.Thread(
@@ -612,13 +570,6 @@ class AudiobookGUI:
             self.fila.put(("log_erro", f"[ERRO] {e}"))
             self.fila.put(("log_erro", traceback.format_exc()))
             self.fila.put(("concluido", False))
-
-    def _copiar_rss(self):
-        url = self.entry_rss.get()
-        if url:
-            self.root.clipboard_clear()
-            self.root.clipboard_append(url)
-            messagebox.showinfo("Copiado", "URL do RSS copiada!\n\nCole em podcasters.amazon.com")
 
     def _copiar_log(self):
         conteudo = self.log_text.get("1.0", "end")
@@ -731,61 +682,62 @@ class AudiobookGUI:
             segs = tempo % 60
             tempo_str = f"{mins} min {segs}s" if mins > 0 else f"{segs} segundos"
 
-            from config import GITHUB_CONFIG
-            nome_arquivo = nome.lower().replace(" ", "-")
-            for char in '!@#$%^&*()+=[]{}|;:,.<>?/\\\'\"':
-                nome_arquivo = nome_arquivo.replace(char, "")
-            url_rss = f"{GITHUB_CONFIG['pages_url']}/{nome_arquivo}.xml"
-            self.entry_rss.delete(0, "end")
-            self.entry_rss.insert(0, url_rss)
-            self.frame_rss.pack(fill="x", pady=(8, 0), before=self.frame_log_header)
+            # Registra no analytics
+            cat = self.tipo_detectado.nome if self.tipo_detectado else "Documentos"
+            arq = str(self.arquivo_selecionado) if self.arquivo_selecionado else ""
+            registrar_envio(nome, cat, arq, tempo)
 
-            dest = PERFIS_USUARIOS.get(self.var_destinatario.get(), {}).get("nome", "")
             messagebox.showinfo("Publicado!",
                 f"Documento disponivel na Alexa!\n\n"
-                f"Diga: 'Alexa, toca {nome} no Amazon Music'\n\n"
-                f"Destino: {dest}\n"
+                f"Diga: 'Alexa, abre meus audiobooks'\n"
+                f"Depois escolha pelo numero.\n\n"
+                f"Documento: {nome}\n"
                 f"Tempo total: {tempo_str}")
         else:
             self._desenhar_etapas(-1)
             self.dot_status.config(text="Erro - verifique o log", fg=C["erro"])
             self.btn_converter.config(state="normal", text="CONVERTER E PUBLICAR")
 
-    def _converter_guia_para_mp3(self):
-        """
-        Converte GUIA_ALEXA_ACESSIVEL.md para MP3 e sobe para o Drive.
-        Permite que o amigo cego acesse o guia via Alexa.
-        """
-        guia_path = Path(__file__).parent / "GUIA_ALEXA_ACESSIVEL.md"
+    def _verificar_emails(self):
+        """Abre dialog de emails recebidos em tororocaxinguele@gmail.com"""
+        def on_email_selecionado(eml_path, nome_sugerido):
+            self._definir_arquivo(eml_path)
+            self.entry_nome.delete(0, "end")
+            self.entry_nome.insert(0, nome_sugerido)
+            self._escrever_log(f"Email carregado: {nome_sugerido}", "ok")
 
-        if not guia_path.exists():
-            messagebox.showwarning(
-                "Guia nao encontrado",
-                f"Arquivo nao encontrado:\n{guia_path}\n\n"
-                "Recrie o arquivo GUIA_ALEXA_ACESSIVEL.md"
-            )
-            return
+        abrir_verificar_emails(self.root, on_email_selecionado)
 
-        resposta = messagebox.askyesno(
-            "Converter Guia para Alexa",
-            "Isso vai:\n\n"
-            "1. Converter o GUIA_ALEXA_ACESSIVEL.md em MP3 (~10 min de audio)\n"
-            "2. Subir para o Google Drive\n"
-            "3. Publicar no RSS\n\n"
-            "O guia ficara disponivel na Alexa.\n"
-            "Continuar?"
-        )
+    def _abrir_labirinto(self):
+        """Abre o Labirinto de Numeros da Alexa"""
+        abrir_labirinto(self.root)
 
-        if not resposta:
-            return
+    def _abrir_analytics(self):
+        """Abre o dashboard de analytics"""
+        abrir_analytics(self.root)
 
-        # Define o arquivo como selecionado e nome padrao
-        self._definir_arquivo(guia_path)
-        self.entry_nome.delete(0, "end")
-        self.entry_nome.insert(0, "Guia de Operacao da Biblioteca")
+    def _abrir_historico(self):
+        """Abre o painel de histórico de documentos enviados"""
+        from analytics_manager import abrir_historico
+        abrir_historico(self.root)
 
-        # Inicia conversao normalmente
-        self._iniciar_conversao()
+    def _abrir_configuracoes_voz(self):
+        """Abre o painel de configurações de voz"""
+        from configuracoes_voz import abrir_configuracoes_voz
+        abrir_configuracoes_voz(self.root)
+
+    def _abrir_gerenciar_equipe(self):
+        """Abre o painel de gerenciamento da equipe"""
+        from gerenciar_equipe import abrir_gerenciar_equipe
+        abrir_gerenciar_equipe(self.root)
+
+    def _iniciar_daemon_gmail(self):
+        """Inicia o daemon de automação de emails em background"""
+        try:
+            from gmail_daemon import ativar_daemon
+            ativar_daemon()
+        except Exception as e:
+            pass  # Daemon é opcional, não bloqueia a app
 
     def _verificar_sistema_async(self):
         def verificar():

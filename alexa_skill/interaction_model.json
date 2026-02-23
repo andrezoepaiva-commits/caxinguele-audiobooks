@@ -4,15 +4,46 @@
       "invocationName": "meus audiobooks",
       "intents": [
         {
+          "name": "SelecionarNumeroIntent",
+          "slots": [
+            {
+              "name": "numero",
+              "type": "AMAZON.NUMBER"
+            }
+          ],
+          "samples": [
+            "{numero}",
+            "numero {numero}",
+            "o {numero}",
+            "o numero {numero}",
+            "quero o {numero}",
+            "toca o {numero}",
+            "abre o {numero}",
+            "o documento {numero}",
+            "documento {numero}",
+            "esse {numero}",
+            "vai pro {numero}"
+          ]
+        },
+        {
           "name": "ListarDocumentosIntent",
           "slots": [],
           "samples": [
-            "quais documentos tenho cambio",
-            "lista meus documentos cambio",
-            "o que tenho para ouvir cambio",
-            "meus documentos cambio",
-            "quais audiobooks tenho cambio",
-            "lista tudo cambio"
+            "quais documentos tenho",
+            "lista meus documentos",
+            "o que tenho para ouvir",
+            "meus documentos",
+            "quais audiobooks tenho",
+            "lista tudo",
+            "o que tem",
+            "repete a lista",
+            "repete",
+            "voltar",
+            "voltar ao menu",
+            "menu principal",
+            "inicio",
+            "categorias",
+            "quais categorias tenho"
           ]
         },
         {
@@ -28,14 +59,17 @@
             }
           ],
           "samples": [
-            "le o documento numero {numero} cambio",
-            "le o livro numero {numero} cambio",
-            "abre o documento numero {numero} cambio",
-            "quero ouvir numero {numero} cambio",
-            "le o documento novo cambio",
-            "le o mais recente cambio",
-            "le {nome_documento} cambio",
-            "abre {nome_documento} cambio"
+            "le o documento numero {numero}",
+            "le o livro numero {numero}",
+            "abre o documento numero {numero}",
+            "quero ouvir numero {numero}",
+            "le o documento novo",
+            "le o mais recente",
+            "le {nome_documento}",
+            "abre {nome_documento}",
+            "quero ouvir {nome_documento}",
+            "toca {nome_documento}",
+            "coloca {nome_documento}"
           ]
         },
         {
@@ -47,42 +81,23 @@
             }
           ],
           "samples": [
-            "meus {tipo_documento} cambio",
-            "lista meus {tipo_documento} cambio",
-            "quero ver {tipo_documento} cambio",
-            "{tipo_documento} de hoje cambio",
-            "mostra {tipo_documento} cambio"
-          ]
-        },
-        {
-          "name": "FavoritarIntent",
-          "slots": [],
-          "samples": [
-            "favorite este cambio",
-            "marcar como favorito cambio",
-            "salvar nos favoritos cambio",
-            "adicionar aos favoritos cambio"
-          ]
-        },
-        {
-          "name": "MostrarFavoritosIntent",
-          "slots": [],
-          "samples": [
-            "mostra meus favoritos cambio",
-            "quais sao meus favoritos cambio",
-            "lista favoritos cambio",
-            "meus favoritos cambio"
+            "meus {tipo_documento}",
+            "lista meus {tipo_documento}",
+            "quero ver {tipo_documento}",
+            "{tipo_documento} de hoje",
+            "mostra {tipo_documento}"
           ]
         },
         {
           "name": "DocumentoNovosIntent",
           "slots": [],
           "samples": [
-            "documentos novos cambio",
-            "o que chegou novo cambio",
-            "novidades cambio",
-            "documentos de hoje cambio",
-            "o que ha de novo cambio"
+            "documentos novos",
+            "o que chegou novo",
+            "novidades",
+            "documentos de hoje",
+            "o que ha de novo",
+            "tem algo novo"
           ]
         },
         {

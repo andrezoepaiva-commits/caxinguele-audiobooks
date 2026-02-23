@@ -1,0 +1,40 @@
+{
+  "Salvos para Escutar Mais Tarde": [
+    {
+      "titulo": "Podcast TechNews — Episódio 45",
+      "tipo": "podcast",
+      "favoritado_em": "22/02/2026 17:57"
+    },
+    {
+      "titulo": "Audiobook: Dom Casmurro — Capítulo 5",
+      "tipo": "livro",
+      "favoritado_em": "22/02/2026 15:57"
+    }
+  ],
+  "Notícias e Artigos Favoritados": [
+    {
+      "titulo": "IA ajuda pessoas com deficiência visual a ler documentos",
+      "fonte": "G1",
+      "favoritado_em": "21/02/2026 17:57"
+    },
+    {
+      "titulo": "Acessibilidade digital: nova lei aprovada no Brasil",
+      "fonte": "Folha",
+      "favoritado_em": "20/02/2026 17:57"
+    }
+  ],
+  "Emails Favoritados": [
+    {
+      "titulo": "Confirmação da consulta médica — Dr. Ferreira",
+      "remetente": "clinica@email.com",
+      "favoritado_em": "22/02/2026 12:57"
+    }
+  ],
+  "Documentos Importantes": [
+    {
+      "titulo": "Contrato de Locação — Apartamento 302",
+      "tipo": "pdf",
+      "favoritado_em": "19/02/2026 17:57"
+    }
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "Compras": [
+    {
+      "id": "3453ef7c",
+      "texto": "Preciso comprar ovos e leite",
+      "categoria_sugerida": "Compras",
+      "data": "22/02/2026 18:04",
+      "audio_original": null,
+      "confirmado": false
+    },
+    {
+      "conteudo": "Leite integral",
+      "adicionado_em": "22/02/2026 17:57"
+    },
+    {
+      "conteudo": "Pão de forma",
+      "adicionado_em": "22/02/2026 17:57"
+    },
+    {
+      "conteudo": "Ovos (dúzia)",
+      "adicionado_em": "22/02/2026 17:57"
+    },
+    {
+      "conteudo": "Banana",
+      "adicionado_em": "22/02/2026 17:57"
+    }
+  ],
+  "Lembretes Médicos": [
+    {
+      "conteudo": "Tomar medicação às 8h",
+      "adicionado_em": "21/02/2026 17:57"
+    },
+    {
+      "conteudo": "Marcar dentista para março",
+      "adicionado_em": "21/02/2026 17:57"
+    },
+    {
+      "conteudo": "Buscar resultado de exame",
+      "adicionado_em": "22/02/2026 17:57"
+    }
+  ],
+  "Ideias e Projetos": [
+    {
+      "conteudo": "Criar podcast mensal com as reuniões Caxinguelê",
+      "adicionado_em": "20/02/2026 17:57"
+    },
+    {
+      "conteudo": "Pesquisar aplicativo de audiodescrição",
+      "adicionado_em": "22/02/2026 14:57"
+    }
+  ],
+  "Tarefas da Semana": [
+    {
+      "id": "5d65ffef",
+      "texto": "Gostaria de fazer um episódio sobre acessibilidade",
+      "categoria_sugerida": "Tarefas da Semana",
+      "data": "22/02/2026 18:04",
+      "audio_original": null,
+      "confirmado": false
+    }
+  ],
+  "Consultas Médicas": [
+    {
+      "id": "0a33f4fc",
+      "texto": "Marcar consulta com oftalmologista",
+      "categoria_sugerida": "Consultas Médicas",
+      "data": "22/02/2026 18:04",
+      "audio_original": null,
+      "confirmado": false
+    }
+  ]
+}

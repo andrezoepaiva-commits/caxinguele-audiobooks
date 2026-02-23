@@ -1,0 +1,155 @@
+[
+  {
+    "numero": 0,
+    "nome": "Organizações Mentais",
+    "tipo": "gravacao"
+  },
+  {
+    "numero": 1,
+    "nome": "Últimas Atualizações",
+    "tipo": "recentes"
+  },
+  {
+    "numero": 2,
+    "nome": "Livros",
+    "tipo": "filtro",
+    "categoria": "Livros"
+  },
+  {
+    "numero": 3,
+    "nome": "Favoritos Importantes",
+    "tipo": "favoritos",
+    "opcoes": [
+      {
+        "numero": 1,
+        "nome": "Salvos para Escutar Mais Tarde"
+      },
+      {
+        "numero": 2,
+        "nome": "Notícias e Artigos Favoritados"
+      },
+      {
+        "numero": 3,
+        "nome": "Emails Favoritados"
+      },
+      {
+        "numero": 4,
+        "nome": "Documentos Importantes"
+      }
+    ]
+  },
+  {
+    "numero": 4,
+    "nome": "Música",
+    "tipo": "musica",
+    "opcoes": [
+      {
+        "numero": 1,
+        "nome": "Músicas Caxinguelê"
+      },
+      {
+        "numero": 2,
+        "nome": "Músicas Capoeira",
+        "sub": [
+          {
+            "numero": 1,
+            "nome": "Música Capoeira Regional"
+          },
+          {
+            "numero": 2,
+            "nome": "Música Capoeira Angola"
+          }
+        ]
+      },
+      {
+        "numero": 3,
+        "nome": "Playlists Personalizadas"
+      }
+    ]
+  },
+  {
+    "numero": 5,
+    "nome": "Calendário e Compromissos",
+    "tipo": "calendario",
+    "opcoes": [
+      {
+        "numero": 1,
+        "nome": "Próximos Compromissos (com opção de editar cada um)"
+      },
+      {
+        "numero": 2,
+        "nome": "Marcar Novo Compromisso"
+      }
+    ]
+  },
+  {
+    "numero": 8,
+    "nome": "Reuniões Caxinguelê",
+    "tipo": "reunioes",
+    "nota": "Alexa lista reuniões numeradas. Amigo escolhe → ouve detalhes → escolhe modo",
+    "opcoes_apos_selecao": [
+      {
+        "numero": 1,
+        "nome": "Resumo em tópicos"
+      },
+      {
+        "numero": 2,
+        "nome": "Resumo pragmático"
+      },
+      {
+        "numero": 3,
+        "nome": "Áudio na íntegra"
+      }
+    ]
+  },
+  {
+    "numero": 9,
+    "nome": "Configurações",
+    "tipo": "configuracoes",
+    "opcoes": [
+      {
+        "numero": 1,
+        "nome": "Escolher Voz de Hoje"
+      },
+      {
+        "numero": 2,
+        "nome": "Velocidade da Fala"
+      },
+      {
+        "numero": 3,
+        "nome": "Guia do Usuário"
+      }
+    ]
+  },
+  {
+    "numero": 10,
+    "nome": "Organizações da Mente em Listas",
+    "tipo": "listas_mentais",
+    "listas_fixas": [
+      {
+        "nome": "Ideias Caxinguelê"
+      },
+      {
+        "nome": "Compras"
+      },
+      {
+        "nome": "Consultas Médicas",
+        "sub": [
+          "Endocrinologista",
+          "Dentista",
+          "Urologista",
+          "Cardiologista"
+        ]
+      },
+      {
+        "nome": "Lembretes Gerais"
+      },
+      {
+        "nome": "Tarefas da Semana"
+      },
+      {
+        "nome": "Insights Pessoais"
+      }
+    ]
+  }
+]
