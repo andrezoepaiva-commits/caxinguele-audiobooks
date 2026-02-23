@@ -1,7 +1,9 @@
 # Credenciais e tokens — NUNCA commitar!
 .env
 credentials.json
+client_secrets.json
 token.json
+token_gmail.json
 
 # Saída gerada
 audiobooks/

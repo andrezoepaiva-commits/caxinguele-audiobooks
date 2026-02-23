@@ -1,6 +1,6 @@
 # Checkpoints - Projeto Caxinguele v2
 
-## Status: Fases 1-5 implementadas (19 FEV 2026)
+## Status: Fase 2A concluida (22 FEV 2026)
 
 ### Fase 1: Suporte Multi-Formato - CONCLUIDA
 - [x] `doc_processor.py` criado
@@ -38,11 +38,34 @@
 - [x] `rss_generator.py` atualizado com tags de categoria
 - [x] Categoria passada do classificador ao RSS
 
-### Fase 6: Custom Skill Alexa com "Cambio" - PENDENTE
-- [ ] Conta developer.amazon.com
-- [ ] AWS Lambda (Python)
-- [ ] Intents: AbrirBiblioteca, ListarDocumentos, FiltrarPorTipo, etc.
-- [ ] Palavra de confirmacao "cambio"
+### Fase 6: Custom Skill Alexa - CONCLUIDA E CERTIFICADA
+- [x] Conta developer.amazon.com configurada
+- [x] AWS Lambda (Python 3.11) deployada
+- [x] Intents: SelecionarNumero, ListarDocumentos, FiltrarPorTipo, LerDocumento, DocumentoNovos
+- [x] Interaction model com 84 samples de voz
+- [x] `indice_generator.py` — Gera indice.json para Lambda consumir
+- [x] `alexa_skill/skill_manifest.json` — Manifesto da skill
+- [x] Skill "Meus Audiobooks" aprovada na certificacao Amazon
+
+### Fase 1D-1E: Menus GUI + Dados - CONCLUIDA
+- [x] `labirinto_ui.py` — editor visual de estrutura de menus
+- [x] `calendario_ui.py` — Menu [5] Calendario e Compromissos
+- [x] `favoritos_ui.py` — Menu [3] Favoritos Importantes
+- [x] `listas_mentais.py` — Menu [10] Organizacoes da Mente em Listas
+- [x] `gravacao_mental.py` — Menu [0] Organizacoes Mentais
+- [x] `livros_ui.py` — Menu [2] Livros e Audiobooks
+- [x] `musica_ui.py` — Menu [4] Musica
+- [x] `reunioes_ui.py` — Menu [8] Reunioes Caxinguele
+- [x] JSONs de dados: compromissos, favoritos, listas_mentais, reunioes, menus_config
+- [x] Persistencia em menus_config.json
+
+### Fase 2A: Voice Editing Lambda - CONCLUIDA
+- [x] Lambda reescrita: state machine multi-nivel (menu/submenu/item/editar)
+- [x] Voice editing: Favoritos (remover), Calendario (editar/remover), Reunioes (3 modos), Listas (remover/editar)
+- [x] Repetir (98) / Voltar (99) universal em todos os niveis
+- [x] Interaction model expandido: 84 samples de voz
+- [x] JSONs publicados no GitHub Pages
+- [x] .gitignore atualizado para proteger secrets
 
 ### Config/Pipeline - CONCLUIDO
 - [x] `config.py` atualizado (PERFIS_USUARIOS, MAX_DOC_SIZE_MB, mensagens v2)
@@ -52,29 +75,18 @@
 - [x] Categoria passada ao upload Drive e RSS
 - [x] `requirements.txt` atualizado com novas dependencias
 
-### Fase 6: Custom Skill Alexa + CAMBIO - ESTRUTURA PRONTA
-- [x] `alexa_skill/lambda/lambda_function.py` — Lambda Function completa (Python)
-- [x] `alexa_skill/interaction_model.json` — Modelo de interacao (intents, slots, utterances)
-- [x] `alexa_skill/skill_manifest.json` — Manifesto da skill
-- [x] `alexa_skill/ALEXA_SETUP.md` — Guia de instalacao passo-a-passo
-- [x] `indice_generator.py` — Gera indice.json para Lambda consumir
-- [x] Palavra "cambio" implementada nas utterances de todos os intents
-- [ ] **Deploy pendente**: precisa de conta developer.amazon.com + AWS Lambda
-
 ### Sistemas Perpetuos
 - [x] `health_monitor.py` — "Avise, nao conserta" (14 pacotes + 11 arquivos verificados)
 - [x] `teste_multiformat.py` — Script de teste rapido (5 formatos)
 - [x] `CHECKPOINTS.md` — Este arquivo
 
-### Botao "Guia p/ Alexa" na GUI
-- [x] Botao amarelo que converte GUIA_ALEXA_ACESSIVEL.md direto para MP3 com 1 clique
-
-### Classificador Melhorado
-- [x] Normalizacao de acentos na comparacao (sem acento = com acento na busca)
-- [x] Livro detectado com 77-80% de confianca mesmo sem acentos
-
 ## Proximos Passos
-1. Deploy Fase 6: criar conta developer.amazon.com + AWS Lambda
-2. Amazon Household: configurar (amazon.com.br/myh/manage)
-3. Instalar Tesseract OCR (opcional, para imagens digitalizadas)
-4. Testar botao "Guia p/ Alexa" com TTS real
+1. Testar GUI visualmente (CHECKLIST_TESTES_GUI.md)
+2. Deploy lambda_function.py atualizada no AWS Console
+3. Testar Lambda com Alexa real
+4. Renomear Skill → "Super Alexa"
+5. README.md para o amigo (manual de uso)
+
+## Dependencias Opcionais Faltantes
+- `mobi` — para ler arquivos .mobi (Kindle). Instalar: `pip install mobi`
+- `pytesseract` — para OCR de imagens. Requer Tesseract instalado no sistema.
