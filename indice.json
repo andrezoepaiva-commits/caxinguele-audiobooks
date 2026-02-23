@@ -1,6 +1,36 @@
 {
   "documentos": [
     {
+      "titulo": "(anonymous) - Cap 05 - CAPÍTULO 5 O Futuro dos Audiobooks.mp3",
+      "url_audio": "https://drive.google.com/uc?export=download&id=1eX_qJyspGLgcXV54hME_QDxURJe-4he5",
+      "categoria": "Documentos",
+      "data": "2026-02-23"
+    },
+    {
+      "titulo": "(anonymous) - Cap 04 - CAPÍTULO 4 Publicação e Distribuição.mp3",
+      "url_audio": "https://drive.google.com/uc?export=download&id=1bgPY0KonCL6MCt4HWFDcJvhRVRFZIVsK",
+      "categoria": "Documentos",
+      "data": "2026-02-23"
+    },
+    {
+      "titulo": "(anonymous) - Cap 03 - CAPÍTULO 3 Tecnologia por Trás do Áudio.mp3",
+      "url_audio": "https://drive.google.com/uc?export=download&id=11Smfeah-oxnnhOdesI7eC95csn5yMIzr",
+      "categoria": "Documentos",
+      "data": "2026-02-23"
+    },
+    {
+      "titulo": "(anonymous) - Cap 02 - CAPÍTULO 2 Benefícios e Aplicações Práticas.mp3",
+      "url_audio": "https://drive.google.com/uc?export=download&id=1GF5xd4N51ajBHA8XebzmWWc6qwQpjo8N",
+      "categoria": "Documentos",
+      "data": "2026-02-23"
+    },
+    {
+      "titulo": "(anonymous) - Cap 01 - CAPÍTULO 1 Introdução ao Mundo dos.mp3",
+      "url_audio": "https://drive.google.com/uc?export=download&id=1w3OUQNIIGIrVz1iRXLhQ0w9W8zfdJl8U",
+      "categoria": "Documentos",
+      "data": "2026-02-23"
+    },
+    {
       "titulo": "untitled - Cap 01 - Parte 1.mp3",
       "url_audio": "https://drive.google.com/uc?export=download&id=1pxrg48yGl1H-9O5THuRXUFhPf1fFw2S9",
       "categoria": "Livros",
@@ -13,7 +43,7 @@
       "data": "2026-02-19"
     }
   ],
-  "total": 2,
-  "atualizado_em": "2026-02-20T15:28:27.387272",
+  "total": 7,
+  "atualizado_em": "2026-02-23T10:10:31.237483",
   "versao": "2.0"
 }
