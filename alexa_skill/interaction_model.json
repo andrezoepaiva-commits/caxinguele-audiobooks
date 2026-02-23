@@ -22,7 +22,16 @@
             "o documento {numero}",
             "documento {numero}",
             "esse {numero}",
-            "vai pro {numero}"
+            "vai pro {numero}",
+            "editar {numero}",
+            "remover {numero}",
+            "resumo {numero}",
+            "topicos {numero}",
+            "integra {numero}",
+            "ouvir {numero}",
+            "seleciona {numero}",
+            "escolhe {numero}",
+            "marca {numero}"
           ]
         },
         {
@@ -43,7 +52,16 @@
             "menu principal",
             "inicio",
             "categorias",
-            "quais categorias tenho"
+            "quais categorias tenho",
+            "retomar",
+            "voltar atras",
+            "sair",
+            "menu",
+            "quais menus tenho",
+            "lista de menus",
+            "repetir opcoes",
+            "ouca novamente",
+            "diga novamente"
           ]
         },
         {
@@ -69,7 +87,12 @@
             "abre {nome_documento}",
             "quero ouvir {nome_documento}",
             "toca {nome_documento}",
-            "coloca {nome_documento}"
+            "coloca {nome_documento}",
+            "ouve {nome_documento}",
+            "reproduz {nome_documento}",
+            "toca numero {numero}",
+            "escuta o {numero}",
+            "le numero {numero}"
           ]
         },
         {
@@ -85,7 +108,14 @@
             "lista meus {tipo_documento}",
             "quero ver {tipo_documento}",
             "{tipo_documento} de hoje",
-            "mostra {tipo_documento}"
+            "mostra {tipo_documento}",
+            "abre {tipo_documento}",
+            "quero ouvir {tipo_documento}",
+            "lista {tipo_documento}",
+            "quais {tipo_documento} tenho",
+            "me mostra {tipo_documento}",
+            "vai para {tipo_documento}",
+            "abra {tipo_documento}"
           ]
         },
         {
@@ -97,7 +127,14 @@
             "novidades",
             "documentos de hoje",
             "o que ha de novo",
-            "tem algo novo"
+            "tem algo novo",
+            "ultimas atualizacoes",
+            "novos documentos",
+            "documentos recentes",
+            "o que foi adicionado",
+            "novos audiobooks",
+            "o que de novo",
+            "algo novo para ouvir"
           ]
         },
         {
