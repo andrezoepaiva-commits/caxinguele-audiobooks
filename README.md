@@ -1,206 +1,159 @@
-# 📚 PDF2Audiobook - Sistema Alexa para Pessoas Cegas
+# 🎵 Projeto Caxinguele v2 — Audiobooks para Alexa
 
-Sistema automatizado que converte PDFs em audiobooks de alta qualidade, acessíveis via Alexa Echo Dot com comandos de voz.
-
-## 🎯 Objetivo
-
-Permitir que pessoas cegas possam ouvir **qualquer PDF** pela Alexa, com controle 100% por voz, sem depender de terceiros.
-
-## ✨ Features
-
-- ✅ **Conversão automática**: PDF → Áudio MP3
-- ✅ **Voz natural**: Edge-TTS do Azure (gratuito)
-- ✅ **OCR automático**: Detecta e processa PDFs escaneados
-- ✅ **Controle por voz**: Play, pause, próximo, anterior, velocidade
-- ✅ **Memória de posição**: Alexa lembra onde parou
-- ✅ **Upload automático**: Google Drive (15GB grátis)
-- ✅ **Integração Alexa**: Via skill MyPod
-- ✅ **Resiliente**: Retry automático, fallbacks, nunca trava
-
-## 🚀 Instalação
-
-### Pré-requisitos
-
-- Python 3.9+
-- Internet (para TTS e upload)
-
-### Passo 1: Instalar dependências
-
-```bash
-pip install -r requirements.txt
-```
-
-### Passo 2: Instalar Tesseract (para OCR - opcional)
-
-**Windows:**
-- Baixe: https://github.com/UB-Mannheim/tesseract/wiki
-- Instale com idioma português
-
-**Linux:**
-```bash
-sudo apt-get install tesseract-ocr tesseract-ocr-por
-```
-
-**Mac:**
-```bash
-brew install tesseract tesseract-lang
-```
-
-### Passo 3: Configurar Google Drive (para upload - opcional)
-
-1. Acesse: https://console.cloud.google.com/
-2. Crie um novo projeto
-3. Ative a API do Google Drive
-4. Crie credenciais OAuth 2.0
-5. Baixe o arquivo JSON de credenciais
-6. Renomeie para `credentials.json` e coloque na pasta do projeto
-
-## 📖 Uso
-
-### Comando Básico
-
-```bash
-python pipeline_mvp.py --pdf "Sapiens.pdf"
-```
-
-### Opções Avançadas
-
-```bash
-# Usar voz específica
-python pipeline_mvp.py --pdf "livro.pdf" --voz camila
-
-# Não fazer upload (apenas gerar áudios localmente)
-python pipeline_mvp.py --pdf "livro.pdf" --no-upload
-
-# Desabilitar OCR automático
-python pipeline_mvp.py --pdf "livro.pdf" --no-ocr
-
-# Especificar pasta de saída
-python pipeline_mvp.py --pdf "livro.pdf" --output "meus_audiobooks/"
-
-# Modo verbose (mais logs)
-python pipeline_mvp.py --pdf "livro.pdf" --verbose
-
-# Retomar processamento interrompido
-python pipeline_mvp.py --pdf "livro.pdf" --resume
-```
-
-### Vozes Disponíveis
-
-- `francisca` - Feminina, jovem, natural **(padrão)**
-- `camila` - Feminina, madura, profissional
-- `antonio` - Masculino, claro
-- `thalita` - Feminina, suave
-
-## 🎙️ Configurar Alexa
-
-Após a conversão, um arquivo `README_MyPod.txt` será gerado com instruções detalhadas.
-
-**Resumo:**
-
-1. **Instalar skill MyPod**:
-   - App Alexa → Skills → Buscar "My Pod" → Ativar
-
-2. **Acessar MyPod**:
-   - https://mypodapp.com
-   - Fazer login com conta Amazon
-
-3. **Criar playlist**:
-   - Adicionar os links dos capítulos (gerados automaticamente)
-
-4. **Usar com Alexa**:
-   ```
-   "Alexa, abre My Pod"
-   "Alexa, toca [Nome do Livro]"
-   "Alexa, pausa"
-   "Alexa, próximo"
-   "Alexa, voltar 30 segundos"
-   ```
-
-## 📂 Estrutura do Projeto
-
-```
-pdf2audiobook/
-├── pipeline_mvp.py         # Orquestrador principal (execute este)
-├── pdf_processor.py        # Processamento de PDFs
-├── tts_engine.py          # Conversão texto → áudio
-├── cloud_uploader.py      # Upload Google Drive
-├── config.py              # Configurações
-├── utils.py               # Funções auxiliares
-├── requirements.txt       # Dependências
-├── audiobooks/            # Audiobooks gerados (criado automaticamente)
-├── temp/                  # Arquivos temporários
-└── .checkpoints/          # Checkpoints para retomar
-```
-
-## ⚙️ Configuração
-
-Edite `config.py` para personalizar:
-
-- Vozes TTS
-- Qualidade de áudio (bitrate, sample rate)
-- Configurações de OCR
-- Número de threads paralelas
-- Retry e timeouts
-- Google Drive
-- E mais...
-
-## 🔧 Troubleshooting
-
-### "Tesseract not found"
-- Instale o Tesseract (veja Instalação)
-- Ou desabilite OCR: `--no-ocr`
-
-### "Google credentials not found"
-- Coloque `credentials.json` na pasta do projeto
-- Ou desabilite upload: `--no-upload`
-
-### "Edge-TTS timeout"
-- Verifique conexão com internet
-- O sistema tentará 3x automaticamente
-- Em último caso, usará fallback local (pyttsx3)
-
-### Processamento interrompido
-- Use `--resume` para retomar de onde parou
-- Checkpoints são salvos automaticamente
-
-## 💡 Dicas
-
-- **PDFs escaneados**: O sistema detecta e aplica OCR automaticamente
-- **Capítulos longos**: São divididos automaticamente em partes menores
-- **Processamento paralelo**: 3 capítulos são processados simultaneamente
-- **Qualidade vs Tamanho**: Edite `AUDIO_CONFIG['bitrate']` em `config.py`
-  - 64kbps = boa qualidade, economiza espaço (padrão)
-  - 128kbps = alta qualidade, mais espaço
-
-## 📊 Estimativas
-
-- **Tempo de conversão**: ~30-60 minutos para livro de 200 páginas
-- **Tamanho final**: ~50-100 MB para livro de 200 páginas (64kbps)
-- **Custo**: R$ 0,00 (tudo gratuito!)
-
-## 🎯 Casos de Uso
-
-- ✅ Livros acadêmicos (PDFs de artigos, teses)
-- ✅ Documentos técnicos (manuais, guias)
-- ✅ Livros digitais (ePub → PDF → Audiobook)
-- ✅ Qualquer texto em português ou inglês
-
-## 📝 Licença
-
-Este projeto foi criado para fins de acessibilidade.
-
-## 🤝 Contribuindo
-
-Este é um projeto MVP focado em funcionalidade. Melhorias são bem-vindas!
-
-## 🔗 Links Úteis
-
-- Edge-TTS: https://github.com/rany2/edge-tts
-- MyPod (Alexa): https://mypodapp.com
-- Google Drive API: https://developers.google.com/drive
-- Tesseract OCR: https://github.com/tesseract-ocr/tesseract
+Um sistema acessível que converte documentos (PDF, Word, EPUB, Email, etc.) em audiobooks em português brasileiro, com acesso via Alexa e interface intuitiva no desktop.
 
 ---
 
-**Desenvolvido com ❤️ para promover acessibilidade**
+## 🚀 Como Usar
+
+### Interface Desktop
+
+```bash
+python audiobook_gui.py
+```
+
+**Fluxo principal:**
+1. Arraste ou selecione um documento
+2. Digite o nome (aparece na Alexa)
+3. Clique "CONVERTER E PUBLICAR"
+4. Aguarde o processamento
+5. Diga ao seu Alexa: "Abre meus audiobooks"
+
+### Comandos Alexa
+
+```
+"Alexa, abre meus audiobooks"
+→ Lista os menus principais
+
+Dentro de um menu:
+"99" → Voltar ao menu principal
+"98" → Repetir as opções
+"1", "2", "3"... → Selecionar item
+```
+
+---
+
+## 📁 O Que Há Aqui
+
+### Menus Principais
+
+| Menu | Acesso | Função |
+|------|--------|--------|
+| **Organizações Mentais** | Gravar tarefas/ideias | Dita ideias que viram listas |
+| **Últimas Atualizações** | Recém-adicionados | Audiobooks novos da semana |
+| **Livros** | Biblioteca completa | Todos os audiobooks |
+| **Favoritos** | Itens marcados | Salvos, notícias, emails, docs |
+| **Música** | Playlists | Músicas organizadas |
+| **Calendário** | Compromissos | Proximos eventos, editar datas |
+| **Reuniões** | Gravadas | Resumo, detalhes ou íntegra |
+| **Configurações** | Voz, velocidade | Personalize a experiência |
+| **Listas** | Compras, lembretes | Listas compartilhadas |
+
+### Painel de Edição (Desktop)
+
+- **Labirinto de Números** — estrutura visual dos menus
+- **Analytics** — histórico de documentos enviados
+- **Histórico** — últimos conversores
+- **Gerenciar Equipe** — colaboradores
+
+---
+
+## 🔧 Dependências
+
+### Instaladas
+
+- **Edge-TTS** — Vozes neurais (Francisca, Camila, Antonio, Thalita)
+- **PyMuPDF** — Processamento de PDFs
+- **Google Drive API** — Upload automático
+- **Tkinter** — Interface desktop
+
+### Opcionais
+
+Para ler arquivos Kindle (.mobi):
+```bash
+pip install mobi
+```
+
+Para OCR de imagens digitalizadas:
+```bash
+pip install pytesseract
+```
++ Instalar Tesseract: https://github.com/UB-Mannheim/tesseract/wiki
+
+---
+
+## 🎙️ Vozes Disponíveis
+
+Todas em português brasileiro:
+
+- **Francisca** — Feminina, jovem, natural (padrão)
+- **Camila** — Feminina, madura, profissional
+- **Antonio** — Masculino, claro
+- **Thalita** — Feminina, suave
+
+---
+
+## 📤 Fluxo de Publicação
+
+1. **Leitura** → Extrai texto do documento
+2. **Classificação** → Detecta tipo (Livro, Email, etc.)
+3. **TTS** → Edge-TTS converte para áudio MP3
+4. **Google Drive** → Upload em pastas organizadas
+5. **RSS/GitHub Pages** → Publica no feed
+6. **Alexa** → Disponível no comando "abre meus audiobooks"
+
+---
+
+## ⚙️ Configuração Inicial
+
+### 1. Google Drive (Obrigatório)
+
+```bash
+python configurar_token.py
+```
+
+→ Autoriza acesso ao Drive (primeira vez apenas)
+
+### 2. Gmail (Opcional)
+
+Para automação de emails:
+
+```bash
+python gmail_daemon.py
+```
+
+---
+
+## 🛠️ Troubleshooting
+
+**"Arquivo não suportado"**
+→ Formatos aceitos: PDF, DOCX, EPUB, TXT, RTF, ODT, EML, MSG, HTML, PNG, JPG
+
+**"Erro ao fazer upload"**
+→ Verifique internet e credenciais Google (./configurar_token.py)
+
+**"Áudio muito rápido/lento"**
+→ Use o painel "Configurações" → "Velocidade da Fala"
+
+**"Alexa não reconhece o comando"**
+→ Experimente: "Alexa, numero 3" em vez de "Alexa, abre menu 3"
+
+---
+
+## 📞 Suporte
+
+Para o amigo (leitor):
+- Use os comandos numerados (1, 2, 3...)
+- 98 = repetir as opções
+- 99 = voltar
+
+Para o desenvolvedor:
+- health_monitor.py — verifica dependências
+- pdf2audiobook.log — histórico de erros
+- CHECKLIST_TESTES_GUI.md — guia de testes
+
+---
+
+**Versão:** 2.0 (Fases 1-2A completas)
+**Data:** 22 de fevereiro de 2026
+**Alexa Skill:** Certificada na Amazon
