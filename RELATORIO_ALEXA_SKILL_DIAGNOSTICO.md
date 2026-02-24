@@ -698,17 +698,164 @@ Não há mensagem de erro clara. Lambda simplesmente não é invocado. Verifique
 
 ---
 
+## 🔴 CAUSA RAIZ #7: Labirinto ignora "opcoes" do JSON para menus tipo "filtro" (24 Fev 2026)
+
+### Sintoma
+- Atualizamos `menus_config.json` e `indice.json` com categorias de livros (Inteligência Sensorial, Geral)
+- Fizemos commit e push para GitHub Pages
+- Labirinto reaberto, mas continua mostrando o fluxo antigo: livros direto sem categorias
+- As 4 opções (1. Inteligência Sensorial, 2. Geral, 98. Repetir, 99. Voltar) **nunca aparecem**
+
+### Diagnóstico (Opus 4.6 — Painel Estruturado de Experts)
+
+**Arquivo:** `labirinto_ui.py`, método `_popular_tree()`, linhas 516-578
+
+**Mecanismo da falha:**
+
+O método `_popular_tree()` renderiza cada menu da lista `self.menu` usando `if/elif/else` por tipo:
+- `tipo == "recentes"` → renderização especial
+- `tipo == "gravacao"` → renderização especial
+- `tipo == "reunioes"` → renderização especial
+- `tipo in ("configuracoes", "favoritos", "musica", "calendario")` → lê `cat.get("opcoes", [])`
+- `else:` → tipo "filtro" **NÃO lê opcoes do JSON**
+
+**O bloco `else` (tipo "filtro") tinha lógica hardcoded:**
+```python
+else:
+    cat_filtro = cat.get("categoria", nome)
+    if cat_filtro == "Livros":
+        # Renderiza livros direto do indice.json
+        # IGNORA completamente cat.get("opcoes", [])
+        # NUNCA verifica se há categorias definidas
+        livros = _agrupar_livros_ui(docs_cat)
+        for livro in livros:
+            # Mostra cada livro com opções hardcoded
+```
+
+**Fluxo dos dados (path do bug):**
+1. `menus_config.json` é lido → `self.menu` recebe lista com Menu [2] contendo `"opcoes": [...]`
+2. `_popular_tree()` itera sobre `self.menu`
+3. Menu [2] tem `tipo: "filtro"` → cai no bloco `else` (linha 516)
+4. Dentro do `else`, verifica `if cat_filtro == "Livros"` (linha 530) → TRUE
+5. **Nunca lê** `cat.get("opcoes", [])` — renderiza direto os livros
+6. Categorias "Inteligência Sensorial" e "Geral" ficam invisíveis
+
+**Por que os outros menus (Favoritos, Configurações, etc.) funcionam?**
+Porque eles têm tipos específicos (`"favoritos"`, `"configuracoes"`) que caem nos blocos `elif` anteriores, que **leem** `cat.get("opcoes", [])`. O tipo `"filtro"` era o único que ignorava.
+
+### Solução Aplicada
+
+**Modificar o bloco `else` para verificar se há "opcoes" antes de renderizar:**
+
+```python
+else:
+    # tipo "filtro"
+    opcoes_cat = cat.get("opcoes", [])
+    opcoes_livro_acao = cat.get("opcoes_apos_selecao", [])
+
+    if opcoes_cat:
+        # TEM categorias definidas → mostrar submenu primeiro
+        # 1. Renderiza cada categoria como nó da árvore
+        # 2. Dentro de cada categoria: lista livros agrupados
+        # 3. Dentro de cada livro: opcoes_apos_selecao (Início, Continuar, etc.)
+        # 4. 98/99 em cada nível
+    else:
+        # SEM categorias → comportamento antigo (lista docs direto)
+```
+
+**Também atualizou `MENU_PADRAO` hardcoded** (linhas 98-99) para incluir as categorias como fallback, garantindo que mesmo sem `menus_config.json`, o Labirinto mostra as 4 opções.
+
+### Como identificar este problema no futuro
+
+**Checklist: Dados no JSON mas Labirinto não mostra**
+
+1. Verificou `menus_config.json` e os dados estão lá? ✅
+2. Publicou no GitHub Pages? ✅
+3. **MAS** o Labirinto não reflete → **Problema está no CÓDIGO, não nos dados**
+4. Procure no `labirinto_ui.py`, método `_popular_tree()`
+5. Verifique qual bloco `if/elif/else` renderiza esse tipo de menu
+6. Se o bloco ignora `cat.get("opcoes", [])`, essa é a causa
+
+**Regra de ouro: Dados no JSON ≠ Código que lê os dados.**
+Sempre verifique se o código de renderização está lendo os campos que você adicionou.
+
+**Padrão de verificação em 3 passos:**
+1. 📝 **Dados:** O JSON tem o campo? → Sim
+2. 🔍 **Leitura:** O código lê esse campo? → Buscar `cat.get("opcoes"` no bloco correspondente
+3. 🖥️ **Renderização:** O código usa o campo para gerar UI? → Verificar se há `tree.insert` com os dados
+
+Se qualquer passo falhar, o dado fica invisível.
+
+### Arquivos afetados e versão corrigida
+
+- ✅ `labirinto_ui.py` — Bloco `else` (tipo "filtro") agora lê `opcoes` e `opcoes_apos_selecao`
+- ✅ `labirinto_ui.py` — `MENU_PADRAO` atualizado com categorias de livros
+- ✅ `menus_config.json` — Menu [2] com categorias (já estava correto)
+
+---
+
+## 📊 TIMELINE DO DEBUGGING (atualizada)
+
+| Hora | Data | Ação | Resultado | Causa Raiz |
+|------|------|------|-----------|-----------|
+| 1h | 23 Fev | Criar skill "Super Alexa" | Erro genérico | #1 |
+| 1h30 | 23 Fev | Colar Interaction Model | Erro de resposta | #2 |
+| 2h | 23 Fev | Corrigir indentação | SyntaxError | #2 |
+| 2h30 | 23 Fev | Remover indentação extra | Menu funciona ✅ | - |
+| 3h | 23 Fev | Testar "Um" na Alexa | Não funciona | #4 |
+| 3h30 | 23 Fev | Melhorar IM (+50 samples) | "Um" reconhecido ✅ | #4 |
+| 4h | 23 Fev | Fallback de números | Funciona 100% ✅ | #5 |
+| 4h30 | 24 Fev | Opus diagnostica samples | Bug: literal match | #5 |
+| 5h | 24 Fev | Remover 64 samples sem slot | Menu completo ✅ | #5 |
+| 5h30 | 25 Fev | Menu 9 submenu sem handler | "Não entendi" | #6 |
+| 6h | 25 Fev | Adicionar handler | Funciona ✅ | #6 |
+| 6h30 | 24 Fev | Adicionar categorias ao JSON | Labirinto ignora | #7 |
+| 7h | 24 Fev | Opus: _popular_tree hardcoded | Código não lê opcoes | #7 |
+| 7h30 | 24 Fev | Corrigir bloco else + MENU_PADRAO | Categorias visíveis ✅ | #7 |
+
+---
+
+## 🎯 PONTOS-CHAVE PARA LEMBRAR (atualizado)
+
+### 7. Dados no JSON ≠ Código que renderiza
+- Adicionar campo ao JSON não basta
+- O código de renderização precisa **ler** e **usar** esse campo
+- Sempre verifique: dados → leitura → renderização
+- Diferentes tipos de menu podem ter caminhos de renderização diferentes
+
+### 8. Labirinto: if/elif/else por tipo
+- Cada `tipo` de menu tem bloco próprio em `_popular_tree()`
+- Tipo "filtro" usa o bloco `else` (genérico)
+- Se adicionar novo campo a um tipo, verifique se o **bloco correto** lê esse campo
+- Os blocos `elif` anteriores podem servir de modelo
+
+---
+
 ## 📚 ARQUIVOS IMPORTANTES
 
 Mantenha estes arquivos no Desktop para referência rápida:
 
-- **`código.txt`** — Lambda function completa (sem indentação extra)
+- **`código.txt`** — Lambda function completa (com submenu de categorias)
 - **`interaction_model.json`** — Interaction Model com 50+ utterances
-- **`menus_config.json`** — Configuração de menus (referência)
+- **`menus_config.json`** — Configuração de menus (com categorias de livros)
+- **`labirinto_ui.py`** — Visualização do Labirinto (com renderização de categorias)
 - **`RELATORIO_ALEXA_SKILL_DIAGNOSTICO.md`** — Este arquivo (você aqui!)
 
 ---
 
+## ✅ CHECKLIST DE VERIFICAÇÃO — Atualizado com Causa #7
+
+### Nível 6: Labirinto / GUI
+- [ ] O JSON tem os dados corretos? (menus_config.json ou indice.json)
+- [ ] O código de renderização LÊ esses dados?
+  - Buscar: `cat.get("opcoes"` no bloco correspondente ao tipo do menu
+- [ ] O código RENDERIZA os dados na árvore?
+  - Buscar: `self.tree.insert` com as variáveis dos dados
+- [ ] Se tipo "filtro": verificar o bloco `else` em `_popular_tree()`
+- [ ] Se novo campo: verificar se MENU_PADRAO também foi atualizado
+
+---
+
 **Fim do Relatório**
-*Escrito em 24 de Fevereiro, 2026*
-*Situação: ✅ Skill funcionando 100%*
+*Atualizado em 24 de Fevereiro, 2026*
+*Situação: ✅ Skill funcionando | ✅ Labirinto com categorias*
