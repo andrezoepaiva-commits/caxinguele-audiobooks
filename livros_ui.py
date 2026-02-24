@@ -1,6 +1,6 @@
 """
 Livros e Audiobooks — Menu 2 do Super Alexa
-Lista as subpastas de audiobooks/ como livros e os MP3s como capítulos.
+Estrutura: Categorias → Livros → Capítulos
 Reproduz via ffplay (já instalado no sistema).
 Salva posição de leitura em ultimo_ouvido.json.
 """
@@ -49,16 +49,41 @@ def salvar_posicao(posicao: dict):
     )
 
 
-def listar_livros() -> list:
+def listar_categorias() -> list:
     """
-    Retorna lista de dicts com cada livro (subpasta de audiobooks/).
+    Retorna lista de categorias (subpastas de audiobooks/).
+    Ex: "Inteligencia_sensorial", "Geral"
+    """
+    categorias = []
+    if not PASTA_AUDIOBOOKS.exists():
+        return categorias
+
+    for pasta in sorted(PASTA_AUDIOBOOKS.iterdir()):
+        if not pasta.is_dir():
+            continue
+        # Contar livros nesta categoria
+        livros_na_cat = [p for p in pasta.iterdir() if p.is_dir() and list(p.glob("*.mp3"))]
+        if livros_na_cat:
+            categorias.append({
+                "nome":  pasta.name,
+                "pasta": str(pasta),
+                "quantidade": len(livros_na_cat),
+            })
+    return categorias
+
+
+def listar_livros_por_categoria(categoria_nome: str) -> list:
+    """
+    Retorna lista de livros de uma categoria específica.
     Cada livro tem: nome, pasta, capitulos (lista de mp3s ordenados).
     """
     livros = []
-    if not PASTA_AUDIOBOOKS.exists():
+    pasta_categoria = PASTA_AUDIOBOOKS / categoria_nome
+
+    if not pasta_categoria.exists():
         return livros
 
-    for pasta in sorted(PASTA_AUDIOBOOKS.iterdir()):
+    for pasta in sorted(pasta_categoria.iterdir()):
         if not pasta.is_dir():
             continue
         mp3s = sorted(pasta.glob("*.mp3"))
@@ -103,13 +128,17 @@ def parar_reproducao():
 # ─────────────────────────── INTERFACE ────────────────────────────
 
 class LivrosUI:
-    """Painel de Livros e Audiobooks — Menu 2"""
+    """Painel de Livros e Audiobooks — Menu 2 com categorias"""
 
     def __init__(self, parent):
         self.parent = parent
         self.posicao = carregar_posicao()
         self.livros = []
         self.tocando = None   # dict do capítulo atual
+
+        # Navegação: None = categorias, "categoria_name" = livros, ("categoria", "livro") = capítulos
+        self.nivel = None
+        self.categoria_selecionada = None
 
         self.win = tk.Toplevel(parent)
         self.win.title("Livros e Audiobooks — Menu 2")
@@ -120,20 +149,31 @@ class LivrosUI:
         self.win.protocol("WM_DELETE_WINDOW", self._ao_fechar)
 
         self._construir_interface()
-        self._atualizar_lista()
+        self._mostrar_categorias()
 
     def _construir_interface(self):
-        # ── Header ──
+        # ── Header com Breadcrumb ──
         header = tk.Frame(self.win, bg=C["painel"], pady=10)
         header.pack(fill="x")
         tk.Frame(header, bg=C["acento"], width=4).pack(side="left", fill="y")
         inner = tk.Frame(header, bg=C["painel"], padx=16)
         inner.pack(side="left", fill="both", expand=True)
-        tk.Label(inner, text="LIVROS E AUDIOBOOKS",
+
+        top_line = tk.Frame(inner, bg=C["painel"])
+        top_line.pack(anchor="w", fill="x")
+
+        tk.Label(top_line, text="LIVROS E AUDIOBOOKS",
                  font=("Segoe UI", 13, "bold"),
-                 bg=C["painel"], fg=C["texto"]).pack(anchor="w")
+                 bg=C["painel"], fg=C["texto"]).pack(anchor="w", side="left")
+
+        # Breadcrumb será atualizado dinamicamente
+        self.breadcrumb_label = tk.Label(top_line, text="",
+                                         font=("Segoe UI", 9),
+                                         bg=C["painel"], fg=C["texto2"])
+        self.breadcrumb_label.pack(anchor="w", side="left", padx=(16, 0))
+
         tk.Label(inner,
-                 text="Duplo-clique em um capítulo para ouvir  |  Posição salva automaticamente",
+                 text="Selecione uma categoria, depois um livro, depois um capítulo",
                  font=("Segoe UI", 9),
                  bg=C["painel"], fg=C["texto2"]).pack(anchor="w")
 
@@ -199,13 +239,23 @@ class LivrosUI:
         cfg = {"font": ("Segoe UI", 10, "bold"), "relief": "flat",
                "cursor": "hand2", "padx": 14, "pady": 6}
 
-        tk.Button(frame_acoes, text="▶ Reproduzir",
+        # Botões à esquerda
+        left_frame = tk.Frame(frame_acoes, bg=C["bg"])
+        left_frame.pack(side="left")
+
+        self.btn_voltar = tk.Button(left_frame, text="◀ Voltar",
+                                    command=self._voltar,
+                                    bg=C["aviso"], fg="black",
+                                    activebackground="#ffd700", **cfg)
+        # Será mostrado/escondido conforme navegação
+
+        tk.Button(left_frame, text="▶ Reproduzir",
                   command=self._reproduzir_selecionado,
                   bg=C["acento"], fg="white",
                   activebackground="#5a52e0", **cfg
                   ).pack(side="left")
 
-        tk.Button(frame_acoes, text="Atualizar",
+        tk.Button(left_frame, text="Atualizar",
                   command=self._atualizar_lista,
                   bg=C["borda"], fg=C["texto"],
                   activebackground=C["entrada"], **cfg
@@ -222,19 +272,65 @@ class LivrosUI:
                                      bg=C["bg"], fg=C["texto2"])
         self.label_status.pack(fill="x", padx=16, pady=(0, 6))
 
-    # ─────────────────────────── DADOS ────────────────────────────
+    # ─────────────────────────── NAVEGAÇÃO ────────────────────────────
 
     def _atualizar_lista(self):
-        """Recarrega livros da pasta audiobooks/ e monta treeview."""
+        """Recarrega conteúdo baseado no nível de navegação atual."""
+        if self.nivel is None:
+            self._mostrar_categorias()
+        elif self.categoria_selecionada and self.nivel == "categoria":
+            self._mostrar_livros(self.categoria_selecionada)
+        else:
+            # Nível de capítulos
+            self._mostrar_capítulos()
+
+    def _mostrar_categorias(self):
+        """Mostra todas as categorias disponíveis."""
+        self.nivel = None
+        self.categoria_selecionada = None
+        self.breadcrumb_label.config(text="")
+        self.btn_voltar.pack_forget()  # Esconde botão Voltar
+
         self.tree.delete(*self.tree.get_children())
-        self.livros = listar_livros()
+        categorias = listar_categorias()
+
+        if not categorias:
+            self.tree.insert("", "end",
+                             text="  Nenhuma categoria encontrada",
+                             values=("",), tags=("parado",))
+            self.label_status.config(
+                text="Crie pastas em audiobooks/ (Ex: Inteligencia_sensorial, Geral)",
+                fg=C["texto2"])
+            return
+
+        for cat in categorias:
+            cat_iid = f"cat_{cat['nome']}"
+            self.tree.insert("", "end",
+                             iid=cat_iid,
+                             text=f"  📚  {cat['nome']}",
+                             values=(f"{cat['quantidade']} livro(s)",),
+                             tags=("livro",))
+
+        self.label_status.config(
+            text=f"{len(categorias)} categoria(s) disponível(is)  |  Duplo-clique para selecionar",
+            fg=C["texto2"])
+
+    def _mostrar_livros(self, categoria_nome: str):
+        """Mostra livros de uma categoria específica."""
+        self.nivel = "categoria"
+        self.categoria_selecionada = categoria_nome
+        self.breadcrumb_label.config(text=f"▶ {categoria_nome}")
+        self.btn_voltar.pack(side="left")
+
+        self.tree.delete(*self.tree.get_children())
+        self.livros = listar_livros_por_categoria(categoria_nome)
 
         if not self.livros:
             self.tree.insert("", "end",
-                             text="  Nenhum audiobook encontrado em audiobooks/",
+                             text=f"  Nenhum livro em {categoria_nome}/",
                              values=("",), tags=("parado",))
             self.label_status.config(
-                text="Pasta audiobooks/ vazia — publique livros pela interface principal.",
+                text=f"Nenhum livro encontrado em '{categoria_nome}'",
                 fg=C["texto2"])
             return
 
@@ -242,8 +338,7 @@ class LivrosUI:
             nome_livro = livro["nome"]
             total_caps = livro["total"]
 
-            # Verifica se há posição salva para este livro
-            pos_salva = self.posicao.get(nome_livro)
+            pos_salva = self.posicao.get(f"{categoria_nome}_{nome_livro}")
             info_livro = f"{total_caps} cap."
             if pos_salva:
                 info_livro = f"▶ cap. {pos_salva['capitulo'] + 1}/{total_caps}"
@@ -267,8 +362,30 @@ class LivrosUI:
 
         total = len(self.livros)
         self.label_status.config(
-            text=f"{total} livro(s) disponíveis  |  Duplo-clique em um capítulo para ouvir",
+            text=f"{total} livro(s) em '{categoria_nome}'  |  Duplo-clique em capítulo para ouvir",
             fg=C["texto2"])
+
+    def _mostrar_capítulos(self):
+        """Reimplementar se necessário para um terceiro nível (raro)."""
+        pass
+
+    def _voltar(self):
+        """Volta para o nível anterior."""
+        if self.nivel == "categoria":
+            self._mostrar_categorias()
+        else:
+            self._mostrar_categorias()
+
+    def _categoria_selecionada(self) -> str | None:
+        """Retorna nome da categoria selecionada, ou None."""
+        sel = self.tree.selection()
+        if not sel:
+            return None
+        iid = sel[0]
+        if not iid.startswith("cat_"):
+            return None
+        # Formato: cat_NomeCategoria
+        return iid.replace("cat_", "", 1)
 
     def _capitulo_selecionado(self) -> dict | None:
         """Retorna info do capítulo selecionado, ou None."""
@@ -288,15 +405,25 @@ class LivrosUI:
         if not livro or idx >= len(livro["capitulos"]):
             return None
         return {
-            "livro":    nome_livro,
-            "idx":      idx,
-            "caminho":  livro["capitulos"][idx],
-            "nome_cap": Path(livro["capitulos"][idx]).stem,
+            "livro":       nome_livro,
+            "categoria":   self.categoria_selecionada,
+            "idx":         idx,
+            "caminho":     livro["capitulos"][idx],
+            "nome_cap":    Path(livro["capitulos"][idx]).stem,
         }
 
     # ─────────────────────────── PLAYER ────────────────────────────
 
     def _ao_duplo_clique(self, event=None):
+        """Duplo-clique: navega ou reproduz conforme o nível."""
+        # Nível de categorias
+        if self.nivel is None:
+            cat = self._categoria_selecionada()
+            if cat:
+                self._mostrar_livros(cat)
+            return
+
+        # Nível de livros/capítulos
         cap = self._capitulo_selecionado()
         if cap:
             self._iniciar_reproducao(cap)
@@ -315,8 +442,9 @@ class LivrosUI:
         reproduzir_mp3(cap["caminho"])
         self.tocando = cap
 
-        # Salva posição
-        self.posicao[cap["livro"]] = {
+        # Salva posição com chave categoria_livro
+        chave = f"{cap['categoria']}_{cap['livro']}"
+        self.posicao[chave] = {
             "capitulo":   cap["idx"],
             "nome_cap":   cap["nome_cap"],
             "ouvido_em":  datetime.now().strftime("%d/%m/%Y %H:%M"),

@@ -51,5 +51,82 @@
   ],
   "total": 8,
   "atualizado_em": "2026-02-23T10:17:05.311085",
-  "versao": "2.0"
+  "versao": "2.0",
+  "menu": {
+    "categorias": [
+      {
+        "numero": 0,
+        "nome": "Organizações Mentais",
+        "tipo": "gravacao"
+      },
+      {
+        "numero": 1,
+        "nome": "Últimas Atualizações",
+        "tipo": "recentes"
+      },
+      {
+        "numero": 2,
+        "nome": "Livros",
+        "tipo": "filtro",
+        "opcoes": [
+          {
+            "numero": 1,
+            "nome": "Livros: Inteligência Sensorial"
+          },
+          {
+            "numero": 2,
+            "nome": "Livros: Geral"
+          }
+        ],
+        "opcoes_apos_selecao": [
+          {
+            "numero": 1,
+            "nome": "Começar do Início"
+          },
+          {
+            "numero": 2,
+            "nome": "Continuar (onde parou)"
+          },
+          {
+            "numero": 3,
+            "nome": "Escolher Capítulo (abre submenu com capítulos)"
+          },
+          {
+            "numero": 4,
+            "nome": "Sinopse do Livro"
+          }
+        ]
+      },
+      {
+        "numero": 3,
+        "nome": "Favoritos Importantes",
+        "tipo": "favoritos"
+      },
+      {
+        "numero": 4,
+        "nome": "Música",
+        "tipo": "musica"
+      },
+      {
+        "numero": 5,
+        "nome": "Calendário e Compromissos",
+        "tipo": "calendario"
+      },
+      {
+        "numero": 8,
+        "nome": "Reuniões Caxinguelê",
+        "tipo": "reunioes"
+      },
+      {
+        "numero": 9,
+        "nome": "Configurações",
+        "tipo": "configuracoes"
+      },
+      {
+        "numero": 10,
+        "nome": "Organizações da Mente em Listas",
+        "tipo": "listas_mentais"
+      }
+    ]
+  }
 }
