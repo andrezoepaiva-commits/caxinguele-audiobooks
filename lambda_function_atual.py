@@ -249,17 +249,20 @@ def _selecionar_menu(numero, session):
 # ==================== MENU [9]: CONFIGURACOES — VOZES E VELOCIDADES ====================
 
 def _menu_config_vozes(session):
-      """Lista vozes disponiveis para o amigo escolher (vozes pt-BR do AWS Polly)."""
-      # Vozes brasileiras de melhor qualidade disponíveis no AWS Polly (Neural/Generative)
+      """Lista vozes disponiveis para o amigo escolher (vozes pt-BR de melhor qualidade)."""
+      # Vozes de melhor qualidade: 3 do AWS Polly + 3 do Azure
       vozes = [
-          "Camila, feminina, a mais natural e fluida",
-          "Vitoria, feminina, muito natural e suave",
-          "Thiago, masculino, natural e claro",
+          "Camila, feminina, a mais natural e fluida, AWS Polly",
+          "Vitoria, feminina, muito natural e suave, AWS Polly",
+          "Thiago, masculino, natural e claro, AWS Polly",
+          "Francisca, feminina jovem, expressiva e natural, Azure",
+          "Thalita, feminina, suave e delicada, Azure",
+          "Antonio, masculino, claro e articulado, Azure",
       ]
       partes = [f"{i} para {v}" for i, v in enumerate(vozes, 1)]
       texto = (
           "Escolher Voz de Hoje. "
-          f"Ha {len(vozes)} opcoes de voz brasileira. {'. '.join(partes)}. "
+          f"Ha {len(vozes)} opcoes de voz brasileira de qualidade. {'. '.join(partes)}. "
           f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar."
       )
       return _resp(texto, end=False, reprompt="Diga o numero da voz.",
@@ -632,7 +635,7 @@ def _selecionar_submenu(numero, session):
                   "Configuracoes. 1 para Escolher Voz. 2 para Velocidade da Fala. 3 para Guia do Usuario. "
                   f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
                   end=False, session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
-          nomes_vozes = ["Camila", "Vitoria", "Thiago"]
+          nomes_vozes = ["Camila", "Vitoria", "Thiago", "Francisca", "Thalita", "Antonio"]
           if not (1 <= numero <= len(nomes_vozes)):
               return _resp(f"Opcao invalida. Escolha entre 1 e {len(nomes_vozes)}.",
                             end=False, session=session)
