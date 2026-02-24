@@ -250,12 +250,11 @@ def _selecionar_menu(numero, session):
 
 def _menu_config_vozes(session):
       """Lista vozes disponiveis para o amigo escolher (vozes pt-BR do AWS Polly)."""
-      # Todas as vozes brasileiras disponíveis no AWS Polly (Neural/Generative)
+      # Vozes brasileiras de melhor qualidade disponíveis no AWS Polly (Neural/Generative)
       vozes = [
-          "Camila, feminina, a mais natural",
-          "Vitoria, feminina, muito natural",
-          "Thiago, masculina, muito natural",
-          "Ricardo, masculina, classica",
+          "Camila, feminina, a mais natural e fluida",
+          "Vitoria, feminina, muito natural e suave",
+          "Thiago, masculino, natural e claro",
       ]
       partes = [f"{i} para {v}" for i, v in enumerate(vozes, 1)]
       texto = (
@@ -633,14 +632,14 @@ def _selecionar_submenu(numero, session):
                   "Configuracoes. 1 para Escolher Voz. 2 para Velocidade da Fala. 3 para Guia do Usuario. "
                   f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
                   end=False, session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
-          nomes_vozes = ["Camila", "Vitoria", "Thiago", "Ricardo"]
+          nomes_vozes = ["Camila", "Vitoria", "Thiago"]
           if not (1 <= numero <= len(nomes_vozes)):
               return _resp(f"Opcao invalida. Escolha entre 1 e {len(nomes_vozes)}.",
                             end=False, session=session)
           voz_escolhida = nomes_vozes[numero - 1]
           return _resp(
               f"Voz {voz_escolhida} selecionada. "
-              "Para ativar, acesse Configuracoes da Alexa no aplicativo, va em Voz da Alexa e escolha a voz desejada. "
+              "Para ativar, acesse Configuracoes da Alexa no aplicativo, va em Voz da Alexa e escolha {voz_escolhida}. "
               f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
               end=False, session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
 
