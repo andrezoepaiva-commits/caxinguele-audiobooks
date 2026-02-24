@@ -237,6 +237,34 @@ def _selecionar_menu(numero, session):
                     end=False, session=session)
 
 
+# ==================== MENU [9]: CONFIGURACOES — VOZES E VELOCIDADES ====================
+
+def _menu_config_vozes(session):
+      """Lista vozes disponiveis para o amigo escolher."""
+      vozes = ["Camila", "Vitoria", "Ricardo", "Thiago"]
+      partes = [f"{i} para {v}" for i, v in enumerate(vozes, 1)]
+      texto = (
+          "Escolher Voz de Hoje. "
+          f"Ha {len(vozes)} opcoes de voz. {'. '.join(partes)}. "
+          f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar."
+      )
+      return _resp(texto, end=False, reprompt="Diga o numero da voz.",
+                    session={**session, "nivel": "submenu", "menu_tipo": "config_vozes"})
+
+
+def _menu_config_velocidades(session):
+      """Lista velocidades de fala disponiveis."""
+      velocidades = ["Muito Devagar", "Devagar", "Normal", "Rapido", "Muito Rapido"]
+      partes = [f"{i} para {v}" for i, v in enumerate(velocidades, 1)]
+      texto = (
+          "Velocidade da Fala. "
+          f"Ha {len(velocidades)} opcoes. {'. '.join(partes)}. "
+          f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar."
+      )
+      return _resp(texto, end=False, reprompt="Diga o numero da velocidade.",
+                    session={**session, "nivel": "submenu", "menu_tipo": "config_velocidades"})
+
+
 # ==================== MENU [3]: FAVORITOS ====================
 
 def _menu_favoritos(session):
@@ -401,17 +429,22 @@ def _selecionar_submenu(numero, session):
       # ---------- Reunioes: amigo escolheu reuniao → modo de escuta ----------
       if menu_tipo == "reunioes":
           reunioes = _obter_json(session, "reunioes") or []
+          if numero == NUM_REPETIR:
+              return _menu_reunioes(session)
+          if numero == NUM_VOLTAR:
+              return _voltar_menu_principal(session)
           if not (1 <= numero <= len(reunioes)):
               return _resp(
-                  f"Numero invalido. Ha {len(reunioes)} reunioes. Qual?",
+                  f"Numero invalido. Ha {len(reunioes)} reunioes. Diga um numero entre 1 e {len(reunioes)}. "
+                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
                   end=False, session=session)
           reu = reunioes[numero - 1]
           texto = (
               f"Reuniao {numero}: {reu.get('titulo', '?')}, dia {reu.get('data', '?')}. "
-              f"Como quer ouvir? "
-              f"1 para resumo em topicos. "
-              f"2 para resumo pragmatico. "
-              f"3 para audio na integra. "
+              "Como quer ouvir? "
+              "1 para Resumo em Topicos Frasais. "
+              "2 para Resumo Pragmatico. "
+              "3 para Audio na Integra. "
               f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar."
           )
           new_session = {
@@ -544,32 +577,66 @@ def _selecionar_submenu(numero, session):
               return _build_audio(titulo, url)
           return _resp(f"{titulo} nao tem audio disponivel.", end=True)
 
-      # ---------- Configuracoes: submenu ----------
+      # ---------- Configuracoes: submenu principal ----------
       if menu_tipo == "configuracoes":
-          opcoes = {
-              1: "Escolher Voz de Hoje",
-              2: "Velocidade da Fala",
-              3: "Guia do Usuario"
-          }
-          if numero not in opcoes:
-              return _resp("Opcao invalida. 1 para Voz. 2 para Velocidade. 3 para Guia.",
-                            end=False, session=session)
-          opcao_nome = opcoes[numero]
+          if numero == NUM_REPETIR:
+              return _resp(
+                  "Configuracoes. 1 para Escolher Voz. 2 para Velocidade da Fala. 3 para Guia do Usuario. "
+                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+                  end=False, session=session)
+          if numero == NUM_VOLTAR:
+              return _voltar_menu_principal(session)
           if numero == 1:
-              return _resp(
-                  "Escolher Voz. Para mudar a voz, use o aplicativo no celular ou as configuracoes da Alexa. "
-                  f"{NUM_VOLTAR} para voltar.",
-                  end=False, session={**session, "nivel": "menu"})
+              return _menu_config_vozes(session)
           if numero == 2:
-              return _resp(
-                  "Velocidade da Fala. Para ajustar a velocidade, use o aplicativo no celular ou as configuracoes da Alexa. "
-                  f"{NUM_VOLTAR} para voltar.",
-                  end=False, session={**session, "nivel": "menu"})
+              return _menu_config_velocidades(session)
           if numero == 3:
               return _resp(
-                  "Guia do Usuario. Voce pode ouvir o menu ajuda dizendo: Alexa, pede ajuda na super alexa. "
-                  f"{NUM_VOLTAR} para voltar.",
-                  end=False, session={**session, "nivel": "menu"})
+                  "Guia do Usuario. Voce pode ouvir o menu de ajuda dizendo: Alexa, pede ajuda na super alexa. "
+                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+                  end=False, session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
+          return _resp("Opcao invalida. 1 para Voz. 2 para Velocidade. 3 para Guia.",
+                        end=False, session=session)
+
+      # ---------- Configuracoes: escolher voz ----------
+      if menu_tipo == "config_vozes":
+          if numero == NUM_REPETIR:
+              return _menu_config_vozes(session)
+          if numero == NUM_VOLTAR:
+              return _resp(
+                  "Configuracoes. 1 para Escolher Voz. 2 para Velocidade da Fala. 3 para Guia do Usuario. "
+                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+                  end=False, session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
+          vozes = ["Camila", "Vitoria", "Ricardo", "Thiago"]
+          if not (1 <= numero <= len(vozes)):
+              return _resp(f"Opcao invalida. Escolha entre 1 e {len(vozes)}.",
+                            end=False, session=session)
+          voz_escolhida = vozes[numero - 1]
+          return _resp(
+              f"Voz {voz_escolhida} selecionada. "
+              "Para ativar esta voz, acesse as Configuracoes da Alexa no aplicativo e selecione a voz desejada. "
+              f"{NUM_VOLTAR} para voltar.",
+              end=False, session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
+
+      # ---------- Configuracoes: escolher velocidade ----------
+      if menu_tipo == "config_velocidades":
+          if numero == NUM_REPETIR:
+              return _menu_config_velocidades(session)
+          if numero == NUM_VOLTAR:
+              return _resp(
+                  "Configuracoes. 1 para Escolher Voz. 2 para Velocidade da Fala. 3 para Guia do Usuario. "
+                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+                  end=False, session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
+          velocidades = ["Muito Devagar", "Devagar", "Normal", "Rapido", "Muito Rapido"]
+          if not (1 <= numero <= len(velocidades)):
+              return _resp(f"Opcao invalida. Escolha entre 1 e {len(velocidades)}.",
+                            end=False, session=session)
+          vel_escolhida = velocidades[numero - 1]
+          return _resp(
+              f"Velocidade {vel_escolhida} selecionada. "
+              "Para aplicar, acesse as Configuracoes da Alexa no aplicativo e ajuste a velocidade da voz. "
+              f"{NUM_VOLTAR} para voltar.",
+              end=False, session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
 
       # Fallback
       return _resp("Nao entendi. Diga o numero ou diga voltar.",
@@ -607,29 +674,45 @@ def _selecionar_acao_item(numero, session):
       # ---------- Reunioes: modo de escuta ----------
       if menu_tipo == "reunioes":
           reu = _obter_json(session, "item_dados") or {}
+          titulo_reu = reu.get('titulo', '?')
+          if numero == NUM_REPETIR:
+              return _resp(
+                  f"Reuniao: {titulo_reu}. Como quer ouvir? "
+                  "1 para Resumo em Topicos Frasais. "
+                  "2 para Resumo Pragmatico. "
+                  "3 para Audio na Integra. "
+                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+                  end=False, session=session)
+          if numero == NUM_VOLTAR:
+              return _menu_reunioes(session)
           if numero == 1:
               resumo = reu.get("resumo", "Sem resumo disponivel.")
               return _resp(
-                  f"Resumo em topicos da reuniao {reu.get('titulo', '?')}. {resumo}. "
+                  f"Resumo em topicos frasais da reuniao {titulo_reu}. {resumo}. "
                   f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
-                  end=False, session={**session, "nivel": "menu"})
+                  end=False, session={**session, "nivel": "item", "menu_tipo": "reunioes"})
           if numero == 2:
               resumo = reu.get("resumo", "Sem resumo disponivel.")
               return _resp(
-                  f"Resumo pragmatico. {resumo}. "
+                  f"Resumo pragmatico da reuniao {titulo_reu}. {resumo}. "
                   f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
-                  end=False, session={**session, "nivel": "menu"})
+                  end=False, session={**session, "nivel": "item", "menu_tipo": "reunioes"})
           if numero == 3:
               transcricao = reu.get("transcricao", "")
               if transcricao:
                   return _resp(
-                      f"Integra da reuniao. {transcricao[:3000]}. "
+                      f"Audio na integra da reuniao {titulo_reu}. {transcricao[:3000]}. "
                       f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
-                      end=False, session={**session, "nivel": "menu"})
-              return _resp("Transcricao nao disponivel para esta reuniao. Diga outro numero.",
-                            end=False, session={**session, "nivel": "menu"})
-          return _resp("Opcao invalida. 1 topicos. 2 resumo. 3 integra.",
-                        end=False, session=session)
+                      end=False, session={**session, "nivel": "item", "menu_tipo": "reunioes"})
+              return _resp(
+                  f"Transcricao nao disponivel para {titulo_reu}. "
+                  "1 para topicos frasais. 2 para resumo pragmatico. "
+                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+                  end=False, session=session)
+          return _resp(
+              "Opcao invalida. 1 para topicos frasais. 2 para resumo pragmatico. 3 para audio na integra. "
+              f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+              end=False, session=session)
 
       # ---------- Favoritos: remover ----------
       if menu_tipo == "favoritos_item":
