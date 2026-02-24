@@ -36,6 +36,54 @@ C = {
 INDICE_LOCAL   = BASE_DIR / "indice.json"
 ARQUIVO_MENUS  = BASE_DIR / "menus_config.json"  # persistência da estrutura dos menus
 
+
+# ==================== HELPERS DE AGRUPAMENTO ====================
+
+def _extrair_livro_base_ui(titulo: str) -> str:
+    """Extrai o nome base do livro removendo 'Cap XX' e tudo depois."""
+    titulo = titulo.strip()
+    if titulo.lower().endswith(".mp3"):
+        titulo = titulo[:-4]
+    match = re.match(r"^(.+?)\s*[-–]\s*Cap(?:itulo|ítulo)?\s*\d+", titulo, re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    partes = titulo.split(" - ")
+    return partes[0].strip() if len(partes) > 1 else titulo
+
+
+def _extrair_num_cap_ui(titulo: str) -> int:
+    """Extrai o número do capítulo de um título."""
+    match = re.search(r"Cap(?:itulo|ítulo)?\s*(\d+)", titulo, re.IGNORECASE)
+    return int(match.group(1)) if match else 999
+
+
+def _agrupar_livros_ui(docs: list) -> list:
+    """Agrupa documentos por livro_base, retorna lista de livros com seus capítulos."""
+    livros_dict = {}
+    for doc in docs:
+        livro_base = _extrair_livro_base_ui(doc.get("titulo", ""))
+        if livro_base not in livros_dict:
+            livros_dict[livro_base] = []
+        livros_dict[livro_base].append(doc)
+
+    for livro_base in livros_dict:
+        livros_dict[livro_base].sort(
+            key=lambda d: _extrair_num_cap_ui(d.get("titulo", ""))
+        )
+
+    livros = []
+    for livro_base, caps in livros_dict.items():
+        nome_exibir = livro_base
+        if livro_base.lower() in ("anonymous", "untitled", ""):
+            nome_exibir = "Livro sem nome"
+        livros.append({
+            "livro_base":      livro_base,
+            "titulo":          nome_exibir,
+            "total_capitulos": len(caps),
+            "capitulos":       caps,
+        })
+    return livros
+
 # Menu padrao: categorias com seus numeros de acesso
 # [numero] = o que o amigo fala para entrar naquela categoria
 # tipo "recentes" = automatico (ultimos 7 dias), nao editavel
@@ -478,20 +526,70 @@ class LabirintoUI:
                     info = "vazio"
                     tag = "cat_vazio"
 
-                # Menu [2] Livros tem UI própria
-                hint = "  ✦ clique duplo para gerenciar" if num == 2 else ""
-                self.tree.insert("", "end", iid=cat_iid,
-                               text=f"[{num}]  {nome}{hint}",
-                               values=(info,), tags=(tag,),
-                               open=(count > 0))
-
-                for i, (orig_idx, doc) in enumerate(docs_cat):
-                    titulo = _titulo_curto(doc.get("titulo", "?"))
-                    data = doc.get("data", "")[:10]
-                    self.tree.insert(cat_iid, "end",
-                                   iid=f"doc_{orig_idx}",
-                                   text=f"          {i + 1}.   {titulo}",
-                                   values=(data,), tags=("documento",))
+                # Menu [2] Livros — exibe agrupado por livro com submenus (como Reuniões)
+                if cat_filtro == "Livros":
+                    hint = "  ✦ clique duplo para gerenciar"
+                    self.tree.insert("", "end", iid=cat_iid,
+                                   text=f"[{num}]  {nome}{hint}",
+                                   values=(info,), tags=(tag,),
+                                   open=(count > 0))
+                    if count > 0:
+                        livros = _agrupar_livros_ui([doc for _, doc in docs_cat])
+                        self.tree.insert(cat_iid, "end",
+                                       text="          Alexa lista: [1] Título Livro A (3 cap.) — [2] Título Livro B...",
+                                       values=("listagem numerada",), tags=("cat_vazio",))
+                        for i, livro in enumerate(livros, 1):
+                            n_caps = livro["total_capitulos"]
+                            livro_iid = f"livro_{num}_{i}"
+                            self.tree.insert(cat_iid, "end",
+                                           iid=livro_iid,
+                                           text=f"          {i}.   {livro['titulo']}  ({n_caps} cap.)",
+                                           values=(f"{n_caps} cap.",),
+                                           tags=("documento",), open=True)
+                            # Submenus do livro (opções após escolher)
+                            opcoes_livro = [
+                                (1, "Começar do Início",       "reproduz cap. 1"),
+                                (2, "Continuar (onde parou)",  "DynamoDB salva posição"),
+                                (3, "Escolher Capítulo  →",    f"submenu com {n_caps} caps"),
+                                (4, "Sinopse do Livro",        "texto descritivo"),
+                            ]
+                            for sub_num, sub_nome, sub_info in opcoes_livro:
+                                self.tree.insert(livro_iid, "end",
+                                               text=f"                    {sub_num}.   {sub_nome}",
+                                               values=(sub_info,), tags=("cat_vazio",))
+                            # Capítulos do livro (submenu 3)
+                            if n_caps > 0:
+                                caps_iid = f"caps_{num}_{i}"
+                                self.tree.insert(livro_iid, "end",
+                                               iid=caps_iid,
+                                               text=f"                    3 →   Capítulos:",
+                                               values=("",), tags=("cat_vazio",), open=False)
+                                for j, cap in enumerate(livro["capitulos"], 1):
+                                    cap_titulo = _titulo_curto(cap.get("titulo", f"Capítulo {j}"))
+                                    self.tree.insert(caps_iid, "end",
+                                                   text=f"                              {j}.   {cap_titulo}",
+                                                   values=("",), tags=("documento",))
+                        # 98/99 de navegação
+                        self.tree.insert(cat_iid, "end",
+                                       text="          98.   Repetir opções",
+                                       values=("navegação",), tags=("cat_vazio",))
+                        self.tree.insert(cat_iid, "end",
+                                       text="          99.   Voltar ao menu principal",
+                                       values=("navegação",), tags=("cat_vazio",))
+                else:
+                    # Outros menus filtro (Artigos, Documentos, etc.)
+                    hint = ""
+                    self.tree.insert("", "end", iid=cat_iid,
+                                   text=f"[{num}]  {nome}{hint}",
+                                   values=(info,), tags=(tag,),
+                                   open=(count > 0))
+                    for i, (orig_idx, doc) in enumerate(docs_cat):
+                        titulo = _titulo_curto(doc.get("titulo", "?"))
+                        data = doc.get("data", "")[:10]
+                        self.tree.insert(cat_iid, "end",
+                                       iid=f"doc_{orig_idx}",
+                                       text=f"          {i + 1}.   {titulo}",
+                                       values=(data,), tags=("documento",))
 
     def _atualizar_preview(self):
         """Mostra exatamente o que Alexa dira ao nivel 1"""

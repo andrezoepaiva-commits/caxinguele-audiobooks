@@ -15,11 +15,14 @@ Estrutura de pastas:
 
 import json
 import subprocess
+import threading
 import tkinter as tk
 from tkinter import ttk, messagebox
 from pathlib import Path
 from datetime import datetime
 from config import BASE_DIR
+
+ARQUIVO_MUSICAS_JSON = BASE_DIR / "musicas.json"
 
 PASTA_MUSICAS   = BASE_DIR / "musicas"
 ARQUIVO_MUSICAS = BASE_DIR / "musicas_config.json"
@@ -209,6 +212,12 @@ class MusicaUI:
                   activebackground=C["entrada"], **cfg
                   ).pack(side="left", padx=(8, 0))
 
+        tk.Button(frame_acoes, text="📡 Publicar na Alexa",
+                  command=self._publicar_na_alexa,
+                  bg=C["ok"], fg="#0f1117",
+                  activebackground="#35c07a", **cfg
+                  ).pack(side="left", padx=(8, 0))
+
         tk.Button(frame_acoes, text="Fechar",
                   command=self._ao_fechar,
                   bg=C["borda"], fg=C["texto"],
@@ -314,6 +323,117 @@ class MusicaUI:
         self.label_tocando.config(text="Reprodução parada.", fg=C["texto2"])
         self.label_status.config(text="Parado.", fg=C["texto2"])
         self._atualizar_lista()
+
+    def _publicar_na_alexa(self):
+        """Publica música selecionada na Alexa: Drive → musicas.json → GitHub Pages."""
+        m = self._musica_selecionada()
+        if not m:
+            messagebox.showinfo("Aviso",
+                "Selecione uma música para publicar.\n"
+                "Clique em uma música na lista, depois clique Publicar na Alexa.",
+                parent=self.win)
+            return
+
+        resposta = messagebox.askyesno(
+            "Publicar na Alexa",
+            f"Publicar  '{m['nome']}'  na Alexa?\n\n"
+            "Isso vai:\n"
+            "  1) Fazer upload para Google Drive\n"
+            "  2) Atualizar musicas.json\n"
+            "  3) Publicar no GitHub Pages\n\n"
+            "A música ficará disponível na Alexa automaticamente.",
+            parent=self.win
+        )
+        if not resposta:
+            return
+
+        self.label_status.config(text=f"Publicando '{m['nome']}'... aguarde.", fg=C["aviso"])
+        threading.Thread(target=self._fazer_upload_alexa, args=(m,), daemon=True).start()
+
+    def _fazer_upload_alexa(self, m: dict):
+        """Thread: faz upload da música para Drive + atualiza musicas.json + publica."""
+        try:
+            # --- Passo 1: Upload para Google Drive ---
+            self.label_status.config(text="[1/3] Conectando ao Google Drive...", fg=C["aviso"])
+            from cloud_uploader import obter_servico_drive, obter_ou_criar_pasta, upload_arquivo
+            from config import GDRIVE_CONFIG
+
+            service = obter_servico_drive()
+
+            # Pasta raiz ("Audiobooks - Alexa") → subpasta "Músicas Caxinguele"
+            pasta_raiz_id = GDRIVE_CONFIG.get("pasta_raiz_id") or None
+            pasta_musicas_id = obter_ou_criar_pasta(service, "Músicas Caxinguele", pasta_raiz_id)
+
+            self.label_status.config(text=f"[1/3] Fazendo upload de '{m['nome']}'...", fg=C["aviso"])
+            resultado = upload_arquivo(service, Path(m["caminho"]), pasta_musicas_id)
+
+            if not resultado:
+                self.label_status.config(text="Erro no upload para Google Drive.", fg=C["erro"])
+                messagebox.showerror("Erro", "Não foi possível fazer upload para o Google Drive.", parent=self.win)
+                return
+
+            url = resultado["direct_url"]
+
+            # --- Passo 2: Atualizar musicas.json local ---
+            self.label_status.config(text="[2/3] Atualizando musicas.json...", fg=C["aviso"])
+            musicas = []
+            if ARQUIVO_MUSICAS_JSON.exists():
+                with open(ARQUIVO_MUSICAS_JSON, "r", encoding="utf-8") as f:
+                    dados = json.load(f)
+                    musicas = dados.get("musicas", [])
+
+            # Verifica se esta música já existe (evita duplicatas)
+            idx_existente = next(
+                (i for i, ms in enumerate(musicas) if ms.get("titulo") == m["nome"]),
+                None
+            )
+            nova_musica = {
+                "titulo":  m["nome"],
+                "artista": m.get("playlist", "Caxinguele"),
+                "url":     url,
+            }
+            if idx_existente is not None:
+                # Atualiza URL da música existente
+                musicas[idx_existente].update(nova_musica)
+                nova_musica["numero"] = musicas[idx_existente].get("numero", idx_existente + 1)
+            else:
+                # Adiciona nova — número sequencial
+                proximo_num = max((ms.get("numero", 0) for ms in musicas), default=0) + 1
+                nova_musica["numero"] = proximo_num
+                musicas.append(nova_musica)
+
+            dados_novos = {
+                "musicas":       musicas,
+                "instrucoes":    "Edite este arquivo para gerenciar músicas. URL = link direto do Google Drive.",
+                "atualizado_em": datetime.now().strftime("%Y-%m-%d"),
+            }
+            with open(ARQUIVO_MUSICAS_JSON, "w", encoding="utf-8") as f:
+                json.dump(dados_novos, f, ensure_ascii=False, indent=2)
+
+            # --- Passo 3: Publicar musicas.json no GitHub Pages ---
+            self.label_status.config(text="[3/3] Publicando no GitHub Pages...", fg=C["aviso"])
+            from github_uploader import upload_arquivo_github
+            upload_arquivo_github(ARQUIVO_MUSICAS_JSON, "musicas.json")
+
+            self.label_status.config(
+                text=f"✅ '{m['nome']}' publicado! Disponível na Alexa agora.",
+                fg=C["ok"])
+            messagebox.showinfo(
+                "Publicado com Sucesso! 🎵",
+                f"'{m['nome']}' está disponível na Alexa!\n\n"
+                f"URL: {url[:60]}...\n\n"
+                "Próxima vez que abrir a skill, a música aparece no menu Música.",
+                parent=self.win
+            )
+
+        except Exception as e:
+            self.label_status.config(text=f"Erro: {e}", fg=C["erro"])
+            messagebox.showerror(
+                "Erro ao Publicar",
+                f"Não foi possível publicar a música:\n\n{e}\n\n"
+                "Verifique se o credentials.json está na pasta do projeto.",
+                parent=self.win
+            )
 
     def _criar_pastas(self):
         criar_pasta_musicas()
