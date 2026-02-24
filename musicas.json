@@ -1,0 +1,54 @@
+{
+  "musicas": [
+    {
+      "numero": 1,
+      "titulo": "Música 1",
+      "artista": "Caxinguele",
+      "url": ""
+    },
+    {
+      "numero": 2,
+      "titulo": "Música 2",
+      "artista": "Caxinguele",
+      "url": ""
+    },
+    {
+      "numero": 3,
+      "titulo": "Música 3",
+      "artista": "Caxinguele",
+      "url": ""
+    },
+    {
+      "numero": 4,
+      "titulo": "Música 4",
+      "artista": "Caxinguele",
+      "url": ""
+    },
+    {
+      "numero": 5,
+      "titulo": "Música 5",
+      "artista": "Caxinguele",
+      "url": ""
+    },
+    {
+      "numero": 6,
+      "titulo": "Música 6",
+      "artista": "Caxinguele",
+      "url": ""
+    },
+    {
+      "numero": 7,
+      "titulo": "Música 7",
+      "artista": "Caxinguele",
+      "url": ""
+    },
+    {
+      "numero": 8,
+      "titulo": "Música 8",
+      "artista": "Caxinguele",
+      "url": ""
+    }
+  ],
+  "instrucoes": "Para adicionar musica: 1) Faca upload do .wav ou .mp3 para Google Drive ou S3. 2) Copie o link direto. 3) Cole no campo url desta musica. 4) Commite este arquivo. A Alexa atualiza automaticamente.",
+  "atualizado_em": "2026-02-24"
+}

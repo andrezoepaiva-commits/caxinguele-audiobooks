@@ -22,6 +22,8 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 
+import boto3
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -48,6 +50,10 @@ MENU_DEFAULT = [
 NUM_REPETIR = 98
 NUM_VOLTAR  = 99
 
+# DynamoDB para persistencia de capitulo entre sessoes
+DYNAMODB_TABLE  = "caxinguele_progresso"
+TOKEN_SEPARADOR = "|||"  # usado no token do AudioPlayer: "livro_base|||capitulo_idx"
+
 
 # ==================== PONTO DE ENTRADA ====================
 
@@ -62,6 +68,16 @@ def lambda_handler(event, context):
               return handle_intent(event)
           elif request_type == "SessionEndedRequest":
               return {"version": "1.0", "response": {}}
+          # Controles do AudioPlayer (botoes no app ou comandos de voz durante musica)
+          elif request_type == "PlaybackController.NextCommandIssued":
+              return handle_playback_next(event)
+          elif request_type == "PlaybackController.PreviousCommandIssued":
+              return handle_playback_prev(event)
+          elif request_type == "AudioPlayer.PlaybackStarted":
+              return handle_playback_started(event)
+          elif request_type in ("AudioPlayer.PlaybackFinished", "AudioPlayer.PlaybackNearlyFinished",
+                                 "AudioPlayer.PlaybackFailed", "AudioPlayer.PlaybackStopped"):
+              return {"version": "1.0", "response": {}}
           else:
               return _resp("Desculpe, nao entendi.")
 
@@ -73,14 +89,18 @@ def lambda_handler(event, context):
 # ==================== LAUNCH ====================
 
 def handle_launch(event):
-      """Abertura: mostra menu principal (nivel 1)"""
+      """Abertura: mostra menu principal (nivel 1). Carrega progresso salvo."""
       documentos, menu = _buscar_dados_completos()
+      user_id = _get_user_id(event)
+      progresso = _carregar_progresso(user_id)
 
       texto = _enumerar_menu_principal(menu, documentos)
       session = {
-          "nivel":     "menu",
+          "nivel":      "menu",
           "todos_docs": json.dumps(documentos),
           "menu":       json.dumps(menu),
+          "user_id":    user_id,
+          "progresso":  json.dumps(progresso),
       }
 
       _registrar_uso("_abertura", "launch", len(documentos))
@@ -104,6 +124,12 @@ def handle_intent(event):
           return _handle_ajuda(session)
       if intent_name in ("ListarDocumentosIntent", "AMAZON.NavigateHomeIntent"):
           return _voltar_menu_principal(session)
+
+      # Pular/voltar capitulo por voz durante leitura
+      if intent_name == "AMAZON.NextIntent":
+          return _pular_capitulo_sessao(session, direcao=+1)
+      if intent_name == "AMAZON.PreviousIntent":
+          return _pular_capitulo_sessao(session, direcao=-1)
 
       # Intent principal: numero
       if intent_name == "SelecionarNumeroIntent":
@@ -243,6 +269,210 @@ def _selecionar_menu(numero, session):
                     end=False, session=session)
 
 
+# ==================== DYNAMODB: PERSISTENCIA DE PROGRESSO ====================
+
+_dynamo_client = None
+
+def _get_user_id(event):
+      """Extrai o user_id da Alexa (identifica o usuario atraves das sessoes)."""
+      try:
+          uid = event.get("context", {}).get("System", {}).get("user", {}).get("userId", "")
+          return uid[:60] if uid else "usuario_default"
+      except Exception:
+          return "usuario_default"
+
+
+def _get_dynamo():
+      global _dynamo_client
+      if _dynamo_client is None:
+          _dynamo_client = boto3.resource("dynamodb", region_name="us-east-1")
+      return _dynamo_client
+
+
+def _carregar_progresso(user_id):
+      """Carrega progresso salvo do usuario (qual capitulo estava em cada livro)."""
+      try:
+          table = _get_dynamo().Table(DYNAMODB_TABLE)
+          resp = table.get_item(Key={"user_id": user_id})
+          return resp.get("Item", {}).get("progresso", {})
+      except Exception as e:
+          logger.info(f"Progresso nao encontrado (normal na 1a vez): {e}")
+          return {}
+
+
+def _salvar_progresso(user_id, livro_base, capitulo_idx):
+      """Salva em qual capitulo o usuario esta."""
+      try:
+          table = _get_dynamo().Table(DYNAMODB_TABLE)
+          table.update_item(
+              Key={"user_id": user_id},
+              UpdateExpression="SET progresso.#livro = :cap",
+              ExpressionAttributeNames={"#livro": livro_base},
+              ExpressionAttributeValues={":cap": int(capitulo_idx)},
+          )
+          logger.info(f"Progresso salvo: {livro_base} cap {capitulo_idx}")
+      except Exception as e:
+          logger.warning(f"Erro ao salvar progresso: {e}")
+
+
+# ==================== HELPERS DE CAPITULOS ====================
+
+def _extrair_livro_base(titulo):
+      """Extrai o nome base do livro removendo 'Cap XX' e tudo depois.
+      Ex: '(anonymous) - Cap 01 - CAPITULO 1 Introducao.mp3' → '(anonymous)'
+      """
+      titulo = titulo.strip()
+      if titulo.lower().endswith(".mp3"):
+          titulo = titulo[:-4]
+      match = re.match(r"^(.+?)\s*[-–]\s*Cap(?:itulo|ítulo)?\s*\d+", titulo, re.IGNORECASE)
+      if match:
+          return match.group(1).strip()
+      # Fallback: tudo antes do primeiro " - "
+      partes = titulo.split(" - ")
+      return partes[0].strip() if len(partes) > 1 else titulo
+
+
+def _extrair_num_capitulo(titulo):
+      """Extrai o número do capítulo de um título. Ex: 'Cap 03' → 3."""
+      match = re.search(r"Cap(?:itulo|ítulo)?\s*(\d+)", titulo, re.IGNORECASE)
+      return int(match.group(1)) if match else 999
+
+
+def _agrupar_livros(docs):
+      """Agrupa documentos por livro_base, retorna lista de livros com seus capítulos."""
+      livros_dict = {}
+      for doc in docs:
+          livro_base = _extrair_livro_base(doc.get("titulo", ""))
+          if livro_base not in livros_dict:
+              livros_dict[livro_base] = []
+          livros_dict[livro_base].append(doc)
+
+      # Ordena capítulos dentro de cada livro
+      for livro_base in livros_dict:
+          livros_dict[livro_base].sort(
+              key=lambda d: _extrair_num_capitulo(d.get("titulo", ""))
+          )
+
+      # Monta lista de livros
+      livros = []
+      for livro_base, caps in livros_dict.items():
+          livros.append({
+              "livro_base":       livro_base,
+              "titulo":           livro_base if livro_base.lower() not in ("anonymous", "untitled", "") else "Livro sem nome",
+              "total_capitulos":  len(caps),
+              "capitulos":        caps,
+              "url_audio":        caps[0].get("url_audio", ""),  # primeiro capitulo
+          })
+      return livros
+
+
+def _pular_capitulo_sessao(session, direcao):
+      """Pula para próximo/anterior capítulo com base na sessao ativa."""
+      capitulos = _obter_json(session, "capitulos_livro") or []
+      cap_atual = int(session.get("capitulo_atual", "0"))
+      livro_base = session.get("livro_base", "")
+      novo_cap = cap_atual + direcao
+
+      if not capitulos:
+          return _resp(
+              "Nao ha capitulos em reproducao. Diga o numero do menu.",
+              end=False, session=session)
+      if novo_cap < 0:
+          return _resp(
+              "Este eh o primeiro capitulo. Diga 1 para comecar novamente.",
+              end=False, session=session)
+      if novo_cap >= len(capitulos):
+          return _resp(
+              "Fim do livro! Voce ouviu todos os capitulos. "
+              f"{NUM_VOLTAR} para voltar ao menu.",
+              end=False, session=session)
+
+      cap = capitulos[novo_cap]
+      titulo = _titulo_curto(cap.get("titulo", f"Capitulo {novo_cap + 1}"))
+      url = cap.get("url_audio", "")
+      user_id = session.get("user_id", "")
+
+      if url:
+          if user_id and livro_base:
+              _salvar_progresso(user_id, livro_base, novo_cap)
+          token = f"{livro_base}{TOKEN_SEPARADOR}{novo_cap}"
+          new_session = {**session, "capitulo_atual": str(novo_cap)}
+          return _build_audio(titulo, url, token=token, session_extra=new_session)
+
+      return _resp(
+          f"Capitulo {novo_cap + 1} sem audio disponivel. "
+          f"Tente outro ou diga {NUM_VOLTAR} para voltar.",
+          end=False, session=session)
+
+
+def handle_playback_started(event):
+      """Quando AudioPlayer comeca a tocar, salva progresso no DynamoDB."""
+      try:
+          token = event.get("request", {}).get("token", "")
+          user_id = _get_user_id(event)
+          if TOKEN_SEPARADOR in token and user_id:
+              partes = token.split(TOKEN_SEPARADOR)
+              livro_base = partes[0]
+              capitulo_idx = int(partes[1])
+              _salvar_progresso(user_id, livro_base, capitulo_idx)
+      except Exception as e:
+          logger.warning(f"Erro ao salvar progresso no playback: {e}")
+      return {"version": "1.0", "response": {}}
+
+
+def handle_playback_next(event):
+      """Botão 'próxima faixa' no app durante reprodução de MP3."""
+      try:
+          token = event.get("request", {}).get("token", "")
+          user_id = _get_user_id(event)
+          if TOKEN_SEPARADOR in token:
+              partes = token.split(TOKEN_SEPARADOR)
+              livro_base = partes[0]
+              cap_atual = int(partes[1])
+              # Busca lista de capitulos do indice
+              documentos, _ = _buscar_dados_completos()
+              docs_livro = [d for d in documentos if _extrair_livro_base(d.get("titulo","")) == livro_base]
+              docs_livro.sort(key=lambda d: _extrair_num_capitulo(d.get("titulo","")))
+              novo_cap = cap_atual + 1
+              if novo_cap < len(docs_livro):
+                  cap = docs_livro[novo_cap]
+                  titulo = _titulo_curto(cap.get("titulo", f"Capitulo {novo_cap + 1}"))
+                  url = cap.get("url_audio", "")
+                  novo_token = f"{livro_base}{TOKEN_SEPARADOR}{novo_cap}"
+                  if url:
+                      _salvar_progresso(user_id, livro_base, novo_cap)
+                      return _build_audio(titulo, url, token=novo_token)
+      except Exception as e:
+          logger.warning(f"Erro handle_playback_next: {e}")
+      return {"version": "1.0", "response": {}}
+
+
+def handle_playback_prev(event):
+      """Botão 'faixa anterior' no app durante reprodução de MP3."""
+      try:
+          token = event.get("request", {}).get("token", "")
+          user_id = _get_user_id(event)
+          if TOKEN_SEPARADOR in token:
+              partes = token.split(TOKEN_SEPARADOR)
+              livro_base = partes[0]
+              cap_atual = int(partes[1])
+              documentos, _ = _buscar_dados_completos()
+              docs_livro = [d for d in documentos if _extrair_livro_base(d.get("titulo","")) == livro_base]
+              docs_livro.sort(key=lambda d: _extrair_num_capitulo(d.get("titulo","")))
+              novo_cap = cap_atual - 1
+              if novo_cap >= 0:
+                  cap = docs_livro[novo_cap]
+                  titulo = _titulo_curto(cap.get("titulo", f"Capitulo {novo_cap + 1}"))
+                  url = cap.get("url_audio", "")
+                  novo_token = f"{livro_base}{TOKEN_SEPARADOR}{novo_cap}"
+                  if url:
+                      _salvar_progresso(user_id, livro_base, novo_cap)
+                      return _build_audio(titulo, url, token=novo_token)
+      except Exception as e:
+          logger.warning(f"Erro handle_playback_prev: {e}")
+      return {"version": "1.0", "response": {}}
+
+
 # ==================== MENU [4]: MUSICAS CAXINGUELE ====================
 
 # URLs das musicas — após upload para o Google Drive ou S3, atualize aqui
@@ -258,9 +488,21 @@ MUSICAS_CAXINGUELE = [
 ]
 
 
+def _buscar_musicas_json():
+      """Tenta buscar musicas.json do GitHub Pages. Fallback para dict local."""
+      try:
+          url = f"{RSS_BASE_URL}/musicas.json"
+          with urllib.request.urlopen(url, timeout=8) as response:
+              dados = json.loads(response.read().decode("utf-8"))
+              return dados.get("musicas", [])
+      except Exception:
+          return MUSICAS_CAXINGUELE  # fallback para o dict hardcoded
+
+
 def _menu_musicas(session):
-      """Lista musicas Caxinguele numeradas."""
-      musicas = [m for m in MUSICAS_CAXINGUELE if m.get("url")]
+      """Lista musicas Caxinguele numeradas. Tenta ler de musicas.json primeiro."""
+      todas = _buscar_musicas_json()
+      musicas = [m for m in todas if m.get("url")]
       if not musicas:
           return _resp(
               "Musicas Caxinguele. As musicas estao sendo preparadas. "
@@ -285,12 +527,19 @@ def _menu_musicas(session):
 
 # ==================== MENU [2]: LIVROS ====================
 
-def _menu_livros(livros, session):
-      """Lista livros catalogados numerados. Amigo escolhe → opcoes de leitura."""
+def _menu_livros(docs_brutos, session):
+      """Lista livros únicos (agrupados por titulo base). Amigo escolhe → capítulos."""
+      livros = _agrupar_livros(docs_brutos)
+      if not livros:
+          return _resp(
+              "Nenhum livro catalogado no momento. Diga outro numero.",
+              end=False, session=session)
+
       partes = []
       for i, livro in enumerate(livros, 1):
-          titulo = _titulo_curto(livro.get("titulo", "Sem titulo"))
-          partes.append(f"{i}. {titulo}")
+          n_caps = livro["total_capitulos"]
+          caps_txt = f"{n_caps} cap." if n_caps > 1 else "1 cap."
+          partes.append(f"{i}. {livro['titulo']} ({caps_txt})")
 
       texto = (
           f"Livros. Voce tem {len(livros)} livro{'s' if len(livros) > 1 else ''} catalogado{'s' if len(livros) > 1 else ''}. "
@@ -300,9 +549,9 @@ def _menu_livros(livros, session):
       )
       new_session = {
           **session,
-          "nivel":     "submenu",
-          "menu_tipo": "livros",
-          "livros":    json.dumps(livros),
+          "nivel":       "submenu",
+          "menu_tipo":   "livros",
+          "livros_dados": json.dumps(livros),
       }
       return _resp(texto, end=False, reprompt="Diga o numero do livro.", session=new_session)
 
@@ -507,11 +756,14 @@ def _selecionar_submenu(numero, session):
               return _build_audio(titulo, url)
           return _resp(f"{titulo} ainda nao disponivel. Diga outro numero.", end=False, session=session)
 
-      # ---------- Livros: amigo escolheu livro → opcoes de leitura ----------
+      # ---------- Livros: amigo escolheu qual livro → mostra opcoes ----------
       if menu_tipo == "livros":
-          livros = _obter_json(session, "livros") or []
+          livros = _obter_json(session, "livros_dados") or []
           if numero == NUM_REPETIR:
-              return _menu_livros(livros, session)
+              # Remonta lista de livros a partir dos docs originais
+              todos_docs = _obter_json(session, "todos_docs") or []
+              docs_livros = [d for d in todos_docs if d.get("categoria","") == "Livros"]
+              return _menu_livros(docs_livros, session)
           if numero == NUM_VOLTAR:
               return _voltar_menu_principal(session)
           if not (1 <= numero <= len(livros)):
@@ -519,29 +771,70 @@ def _selecionar_submenu(numero, session):
                   f"Numero invalido. Ha {len(livros)} livros. Diga um numero entre 1 e {len(livros)}. "
                   f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
                   end=False, session=session)
+
           livro = livros[numero - 1]
-          titulo = _titulo_curto(livro.get("titulo", "Sem titulo"))
-          # Verifica se tem capitulo salvo para continuar
-          capitulo_salvo = session.get("capitulo_salvo_" + str(numero - 1), "")
-          opcao_continuar = f"2 para Continuar do Capitulo {capitulo_salvo}. " if capitulo_salvo else ""
+          titulo_livro = livro["titulo"]
+          capitulos = livro.get("capitulos", [])
+          livro_base = livro.get("livro_base", titulo_livro)
+          n_caps = livro["total_capitulos"]
+
+          # Verifica progresso salvo no DynamoDB
+          progresso = _obter_json(session, "progresso") or {}
+          cap_salvo = progresso.get(livro_base, None)
+          opcao_continuar = ""
+          if cap_salvo is not None and cap_salvo > 0:
+              opcao_continuar = f"2 para Continuar do Capitulo {cap_salvo + 1}. "
+
           texto = (
-              f"{titulo}. O que quer fazer? "
-              "1 para Comecar a Ler do Inicio. "
+              f"{titulo_livro}. {n_caps} capitulo{'s' if n_caps > 1 else ''}. "
+              "1 para Comecar do Inicio. "
               f"{opcao_continuar}"
-              "3 para Sinopse do Livro. "
-              "4 para Adicionar aos Favoritos. "
-              "5 para Compartilhar. "
+              "3 para Escolher Capitulo. "
+              "4 para Sinopse. "
               f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar."
           )
           new_session = {
               **session,
-              "nivel":        "item",
-              "menu_tipo":    "livros",
-              "item_idx":     str(numero - 1),
-              "item_dados":   json.dumps(livro),
-              "livro_titulo": titulo,
+              "nivel":           "item",
+              "menu_tipo":       "livros",
+              "livro_base":      livro_base,
+              "livro_titulo":    titulo_livro,
+              "capitulos_livro": json.dumps(capitulos),
+              "capitulo_atual":  str(cap_salvo if cap_salvo is not None else 0),
           }
           return _resp(texto, end=False, session=new_session)
+
+      # ---------- Livros capitulos: amigo escolheu capitulo especifico ----------
+      if menu_tipo == "livros_capitulos":
+          capitulos = _obter_json(session, "capitulos_livro") or []
+          livro_base = session.get("livro_base", "")
+          titulo_livro = session.get("livro_titulo", "Livro")
+          user_id = session.get("user_id", "")
+          if numero == NUM_REPETIR:
+              partes = [f"{i}. {_titulo_curto(c.get('titulo', f'Cap {i}'))}" for i, c in enumerate(capitulos, 1)]
+              return _resp(
+                  f"{titulo_livro}. {'. '.join(partes)}. "
+                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+                  end=False, session=session)
+          if numero == NUM_VOLTAR:
+              return _resp(
+                  f"{titulo_livro}. 1 para Comecar do Inicio. 3 para Escolher Capitulo. 4 para Sinopse. "
+                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+                  end=False, session={**session, "nivel": "item", "menu_tipo": "livros"})
+          if not (1 <= numero <= len(capitulos)):
+              return _resp(
+                  f"Numero invalido. Ha {len(capitulos)} capitulos. Diga um numero entre 1 e {len(capitulos)}.",
+                  end=False, session=session)
+          cap_idx = numero - 1
+          cap = capitulos[cap_idx]
+          url = cap.get("url_audio", "")
+          cap_titulo = _titulo_curto(cap.get("titulo", f"Capitulo {numero}"))
+          if url:
+              token = f"{livro_base}{TOKEN_SEPARADOR}{cap_idx}"
+              new_session = {**session, "capitulo_atual": str(cap_idx)}
+              _registrar_uso(cap_titulo, "play_livro_capitulo")
+              return _build_audio(cap_titulo, url, token=token, session_extra=new_session)
+          return _resp(f"Capitulo {numero} sem audio disponivel.", end=False, session=session)
 
       # ---------- Calendario: amigo escolheu compromisso ----------
       if menu_tipo == "calendario":
@@ -772,16 +1065,21 @@ def _selecionar_submenu(numero, session):
                   "Configuracoes. 1 para Escolher Voz. 2 para Velocidade da Fala. 3 para Guia do Usuario. "
                   f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
                   end=False, session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
-          velocidades = ["Muito Devagar", "Devagar", "Normal", "Rapido", "Muito Rapido"]
-          if not (1 <= numero <= len(velocidades)):
-              return _resp(f"Opcao invalida. Escolha entre 1 e {len(velocidades)}.",
+          velocidades_nomes  = ["Muito Devagar", "Devagar", "Normal", "Rapido", "Muito Rapido"]
+          velocidades_chaves = ["muito_devagar", "devagar", "normal", "rapido", "muito_rapido"]
+          if not (1 <= numero <= len(velocidades_nomes)):
+              return _resp(f"Opcao invalida. Escolha entre 1 e {len(velocidades_nomes)}.",
                             end=False, session=session)
-          vel_escolhida = velocidades[numero - 1]
+          vel_nome  = velocidades_nomes[numero - 1]
+          vel_chave = velocidades_chaves[numero - 1]
+          # Salva velocidade na sessao: _resp vai usar SSML automaticamente
+          new_session = {**session, "nivel": "submenu", "menu_tipo": "configuracoes", "velocidade": vel_chave}
           return _resp(
-              f"Velocidade {vel_escolhida} selecionada. "
-              "Para aplicar, acesse as Configuracoes da Alexa no aplicativo e ajuste a velocidade da voz. "
+              f"Velocidade {vel_nome} ativada para esta sessao. "
+              "Os menus e textos serao falados nessa velocidade. "
+              "Para audiobooks gravados (MP3), a velocidade nao pode ser alterada em tempo real. "
               f"{NUM_VOLTAR} para voltar.",
-              end=False, session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
+              end=False, session=new_session)
 
       # Fallback
       return _resp("Nao entendi. Diga o numero ou diga voltar.",
@@ -794,59 +1092,85 @@ def _selecionar_acao_item(numero, session):
       """Amigo esta vendo detalhes de um item e escolheu uma acao."""
       menu_tipo = session.get("menu_tipo", "")
 
-      # ---------- Livros: amigo escolheu acao ----------
+      # ---------- Livros: amigo escolheu acao (comecar, continuar, escolher cap, sinopse) ----------
       if menu_tipo == "livros":
-          livro = _obter_json(session, "item_dados") or {}
-          titulo = session.get("livro_titulo", livro.get("titulo", "?"))
-          url = livro.get("url_audio", "")
-          item_idx = session.get("item_idx", "0")
+          titulo = session.get("livro_titulo", "?")
+          livro_base = session.get("livro_base", "")
+          capitulos = _obter_json(session, "capitulos_livro") or []
+          user_id = session.get("user_id", "")
+          progresso = _obter_json(session, "progresso") or {}
+          cap_salvo = progresso.get(livro_base, None)
+
           if numero == NUM_REPETIR:
-              capitulo_salvo = session.get("capitulo_salvo_" + item_idx, "")
-              opcao_continuar = f"2 para Continuar do Capitulo {capitulo_salvo}. " if capitulo_salvo else ""
+              opcao_continuar = f"2 para Continuar do Capitulo {cap_salvo + 1}. " if cap_salvo else ""
               return _resp(
                   f"{titulo}. 1 para Comecar do Inicio. {opcao_continuar}"
-                  "3 para Sinopse. 4 para Favoritos. 5 para Compartilhar. "
+                  "3 para Escolher Capitulo. 4 para Sinopse. "
                   f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
                   end=False, session=session)
+
           if numero == NUM_VOLTAR:
-              livros = _obter_json(session, "livros") or []
-              return _menu_livros(livros, session)
+              todos_docs = _obter_json(session, "todos_docs") or []
+              docs_livros = [d for d in todos_docs if d.get("categoria","") == "Livros"]
+              return _menu_livros(docs_livros, session)
+
           if numero == 1:
-              # Comecar do inicio
-              if url:
-                  _registrar_uso(titulo, "play_livro_inicio")
-                  new_session = {**session, "capitulo_atual": "1"}
-                  return _build_audio(titulo, url)
+              # Comecar do capitulo 1
+              if capitulos:
+                  cap = capitulos[0]
+                  url = cap.get("url_audio", "")
+                  cap_titulo = _titulo_curto(cap.get("titulo", "Capitulo 1"))
+                  if url:
+                      _registrar_uso(titulo, "play_livro_inicio")
+                      token = f"{livro_base}{TOKEN_SEPARADOR}0"
+                      new_session = {**session, "capitulo_atual": "0"}
+                      return _build_audio(cap_titulo, url, token=token, session_extra=new_session)
               return _resp(f"{titulo} nao tem audio disponivel.", end=False, session=session)
+
           if numero == 2:
               # Continuar do capitulo salvo
-              capitulo_salvo = session.get("capitulo_salvo_" + item_idx, "")
-              if capitulo_salvo and url:
-                  _registrar_uso(titulo, "play_livro_continuar")
-                  return _build_audio(f"{titulo} — Capitulo {capitulo_salvo}", url)
+              if cap_salvo is not None and capitulos and cap_salvo < len(capitulos):
+                  cap = capitulos[cap_salvo]
+                  url = cap.get("url_audio", "")
+                  cap_titulo = _titulo_curto(cap.get("titulo", f"Capitulo {cap_salvo + 1}"))
+                  if url:
+                      _registrar_uso(titulo, "play_livro_continuar")
+                      token = f"{livro_base}{TOKEN_SEPARADOR}{cap_salvo}"
+                      new_session = {**session, "capitulo_atual": str(cap_salvo)}
+                      return _build_audio(cap_titulo, url, token=token, session_extra=new_session)
               return _resp(
                   f"Nenhum progresso salvo para {titulo}. Diga 1 para comecar do inicio. "
                   f"{NUM_VOLTAR} para voltar.",
                   end=False, session=session)
+
           if numero == 3:
-              sinopse = livro.get("sinopse", "Sinopse nao disponivel para este livro.")
+              # Listar capitulos para escolher
+              partes = []
+              for i, cap in enumerate(capitulos, 1):
+                  partes.append(f"{i}. {_titulo_curto(cap.get('titulo', f'Capitulo {i}'))}")
+              texto = (
+                  f"{titulo}. {len(capitulos)} capitulos. "
+                  f"{'. '.join(partes)}. "
+                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar. "
+                  "Qual capitulo quer ouvir?"
+              )
+              return _resp(texto, end=False,
+                            session={**session, "nivel": "submenu", "menu_tipo": "livros_capitulos"})
+
+          if numero == 4:
+              # Sinopse do livro (campo 'sinopse' ou mensagem padrao)
+              if capitulos:
+                  sinopse = capitulos[0].get("sinopse", "Sinopse nao disponivel para este livro.")
+              else:
+                  sinopse = "Sinopse nao disponivel."
               return _resp(
                   f"Sinopse de {titulo}. {sinopse}. "
                   "1 para Comecar a Ler. "
                   f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
                   end=False, session=session)
-          if numero == 4:
-              return _resp(
-                  f"{titulo} adicionado aos Favoritos. "
-                  f"{NUM_VOLTAR} para voltar.",
-                  end=False, session={**session, "acao_pendente": "favoritar_livro"})
-          if numero == 5:
-              return _resp(
-                  f"Para compartilhar {titulo}, acesse o aplicativo Caxinguele no celular. "
-                  f"{NUM_VOLTAR} para voltar.",
-                  end=False, session=session)
+
           return _resp(
-              "Opcao invalida. 1 para ler. 3 para sinopse. 4 para favoritos. "
+              "Opcao invalida. 1 para inicio. 2 para continuar. 3 para capitulos. 4 para sinopse. "
               f"{NUM_VOLTAR} para voltar.",
               end=False, session=session)
 
@@ -1350,25 +1674,54 @@ def _extrair_texto(slots, nome):
 # ==================== RESPOSTAS ====================
 
 def _resp(text, end=True, reprompt=None, session=None):
+      """Cria resposta da Alexa. Se session tem 'velocidade', usa SSML para ajustar ritmo."""
+      # Mapa de velocidade para SSML prosody rate
+      _RATE_MAP = {
+          "muito_devagar": "x-slow",
+          "devagar":       "slow",
+          "normal":        "medium",
+          "rapido":        "fast",
+          "muito_rapido":  "x-fast",
+      }
+
+      vel = (session or {}).get("velocidade", "normal")
+      rate = _RATE_MAP.get(vel, "medium")
+
+      if rate != "medium":
+          # Escapa caracteres especiais XML no texto
+          texto_seguro = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+          ssml = f'<speak><prosody rate="{rate}">{texto_seguro}</prosody></speak>'
+          fala = {"type": "SSML", "ssml": ssml}
+          reprompt_fala = None
+          if reprompt:
+              rep_seguro = reprompt.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+              reprompt_fala = {"type": "SSML", "ssml": f'<speak><prosody rate="{rate}">{rep_seguro}</prosody></speak>'}
+      else:
+          fala = {"type": "PlainText", "text": text}
+          reprompt_fala = {"type": "PlainText", "text": reprompt} if reprompt else None
+
       response = {
           "version": "1.0",
           "response": {
-              "outputSpeech": {"type": "PlainText", "text": text},
+              "outputSpeech": fala,
               "shouldEndSession": end,
           }
       }
-      if reprompt:
-          response["response"]["reprompt"] = {
-              "outputSpeech": {"type": "PlainText", "text": reprompt}
-          }
+      if reprompt_fala:
+          response["response"]["reprompt"] = {"outputSpeech": reprompt_fala}
       if session:
           response["sessionAttributes"] = session
       return response
 
 
-def _build_audio(titulo, url_audio):
+def _build_audio(titulo, url_audio, token=None, session_extra=None):
+      """Reproduz um MP3 via AudioPlayer.
+      token: identificador do audio, usado para pular capitulos (livro_base|||cap_idx)
+      session_extra: atributos de sessao a preservar (obs: Alexa encerra sessao durante audio)
+      """
       _registrar_uso(titulo, "play")
-      return {
+      audio_token = token or titulo
+      resposta = {
           "version": "1.0",
           "response": {
               "outputSpeech": {"type": "PlainText", "text": f"Reproduzindo {titulo}"},
@@ -1378,7 +1731,7 @@ def _build_audio(titulo, url_audio):
                   "audioItem": {
                       "stream": {
                           "url": url_audio,
-                          "token": titulo,
+                          "token": audio_token,
                           "offsetInMilliseconds": 0,
                       },
                       "metadata": {
@@ -1390,3 +1743,6 @@ def _build_audio(titulo, url_audio):
               "shouldEndSession": True,
           }
       }
+      if session_extra:
+          resposta["sessionAttributes"] = session_extra
+      return resposta

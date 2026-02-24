@@ -402,6 +402,162 @@ def _extrair_numero_da_fala(event):
 
 ---
 
+## 🔴 CAUSA RAIZ #6: Menu 9 (Configurações) submenu sem handler (24-25 Fev, 2026)
+
+### Sintoma
+- Menu principal funciona: dizer "9" abre Configurações ✅
+- Configurações oferece opções: "1 para Voz, 2 para Velocidade, 3 para Guia"
+- Ao dizer "1" no submenu de Configurações: retorna "Não entendi. Diga o número ou diga voltar." ❌
+- O mesmo "1" funciona em outros submenus (Livros, Reuniões, etc.) ✅
+- CloudWatch logs mostram intent capturado corretamente, mas Lambda não responde
+
+### Diagnóstico
+
+**Causa raiz:** A função `_selecionar_submenu()` não tinha **handler específico para `menu_tipo == "configuracoes"`**.
+
+Arquitetura de navegação da Alexa Skill:
+```
+Nível: menu (menu principal)
+  ↓ usuário diz "9"
+Nível: submenu (abrir submenu)
+  ↓ usuário diz "1", "2" ou "3"
+  (AQUI: _selecionar_submenu() precisa saber qual submenu está aberto)
+Nível: item (detalhes)
+```
+
+**O problema:**
+```python
+def _selecionar_submenu(numero, session):
+    menu_tipo = session.get("menu_tipo", "")
+
+    # Handlers para "musicas", "livros", "calendario", "reunioes", etc.
+    if menu_tipo == "musicas":
+        # ... funciona
+    if menu_tipo == "livros":
+        # ... funciona
+    # ... mais handlers ...
+
+    # ❌ MAS NÃO TINHA handler para "configuracoes"
+    # Quando menu_tipo == "configuracoes", caia no fallback "Não entendi"
+```
+
+**Por que "9" funcionava?**
+- Menu 9 é aberto em `_selecionar_menu()`, que está correto
+- Problema é quando volta para o submenu das Configurações
+
+**Por que outros números funcionam em outros submenus?**
+- Submenus de Livros, Reuniões, Músicas têm handlers bem definidos
+- Configurações não tinha handler, ficava órfão
+
+### Solução Aplicada
+
+**Adicionar handler completo para `menu_tipo == "configuracoes"`:**
+
+```python
+# ---------- Configuracoes: submenu principal ----------
+if menu_tipo == "configuracoes":
+    if numero == NUM_REPETIR:
+        return _resp(
+            "Configuracoes. 1 para Escolher Voz. 2 para Velocidade da Fala. 3 para Guia do Usuario. "
+            f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+            end=False, session=session)
+    if numero == NUM_VOLTAR:
+        return _voltar_menu_principal(session)
+    if numero == 1:
+        return _menu_config_vozes(session)
+    if numero == 2:
+        return _menu_config_velocidades(session)
+    if numero == 3:
+        return _resp(
+            "Guia do Usuario. Voce pode ouvir o menu de ajuda dizendo: Alexa, pede ajuda na super alexa. "
+            f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+            end=False, session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
+    return _resp("Opcao invalida. 1 para Voz. 2 para Velocidade. 3 para Guia.",
+                 end=False, session=session)
+
+# ---------- Configuracoes: escolher voz ----------
+if menu_tipo == "config_vozes":
+    if numero == NUM_REPETIR:
+        return _menu_config_vozes(session)
+    if numero == NUM_VOLTAR:
+        return _resp(
+            "Configuracoes. 1 para Escolher Voz. 2 para Velocidade da Fala. 3 para Guia do Usuario. "
+            f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+            end=False, session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
+    nomes_vozes = ["Camila", "Vitoria", "Thiago", "Francisca", "Thalita", "Antonio"]
+    if not (1 <= numero <= len(nomes_vozes)):
+        return _resp(f"Opcao invalida. Escolha entre 1 e {len(nomes_vozes)}.",
+                     end=False, session=session)
+    voz_escolhida = nomes_vozes[numero - 1]
+    return _resp(
+        f"Voz {voz_escolhida} selecionada. "
+        "Para ativar, acesse Configuracoes da Alexa no aplicativo, va em Voz da Alexa e escolha {voz_escolhida}. "
+        f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+        end=False, session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
+
+# ---------- Configuracoes: escolher velocidade ----------
+if menu_tipo == "config_velocidades":
+    if numero == NUM_REPETIR:
+        return _menu_config_velocidades(session)
+    if numero == NUM_VOLTAR:
+        return _resp(
+            "Configuracoes. 1 para Escolher Voz. 2 para Velocidade da Fala. 3 para Guia do Usuario. "
+            f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+            end=False, session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
+    velocidades = ["Muito Devagar", "Devagar", "Normal", "Rapido", "Muito Rapido"]
+    if not (1 <= numero <= len(velocidades)):
+        return _resp(f"Opcao invalida. Escolha entre 1 e {len(velocidades)}.",
+                     end=False, session=session)
+    vel_escolhida = velocidades[numero - 1]
+    return _resp(
+        f"Velocidade {vel_escolhida} selecionada. "
+        "Para aplicar, acesse as Configuracoes da Alexa no aplicativo e ajuste a velocidade da voz. "
+        f"{NUM_VOLTAR} para voltar.",
+        end=False, session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
+```
+
+### Como identificar este problema no futuro
+
+**Checklist: Menu A abre, mas número no submenu de Menu A não funciona**
+
+1. **Menu principal funciona** (ex: dizer "9" abre Configurações)
+2. **Submenu é aberto** (Alexa anuncia opções)
+3. **Mas número no submenu não é reconhecido** (ex: dizer "1" retorna "Não entendi")
+4. **Outros submenus funcionam** (ex: "2" para Livros funciona)
+
+**Diagnóstico imediato:**
+
+Procure no `código.txt` pela função `_selecionar_submenu()`:
+```python
+def _selecionar_submenu(numero, session):
+    menu_tipo = session.get("menu_tipo", "")
+
+    # Se seu submenu NÃO tem handler, adicione:
+    if menu_tipo == "seu_novo_submenu":
+        # ... adicione lógica aqui
+```
+
+**Regra de ouro:** Cada `menu_tipo` que você criar em `_selecionar_menu()` **precisa de um handler correspondente em `_selecionar_submenu()`**. Caso contrário, o submenu fica órfão.
+
+### Padrão de navegação a seguir
+
+```
+_selecionar_menu() → Abre um menu, retorna com nivel="submenu" + menu_tipo="X"
+  ↓
+_selecionar_submenu() → Processa numero no submenu. PRECISA ter: if menu_tipo == "X"
+  ↓
+_selecionar_acao_item() → Processa acao no item (se necessário)
+```
+
+Se criar novo menu e esquecer do handler em `_selecionar_submenu()`, o submenu não funciona.
+
+### Arquivos afetados e versão corrigida
+
+- ✅ `código.txt` — Handler de configurações adicionado em `_selecionar_submenu()` (atualizado 25 Fev 2026)
+- ✅ `lambda_function_atual.py` — Sincronizado (atualizado 25 Fev 2026)
+
+---
+
 ## ✅ CHECKLIST DE VERIFICAÇÃO — Quando a Skill não funciona
 
 Use este checklist **em ordem** para diagnosticar rapidamente:
@@ -448,15 +604,19 @@ Use este checklist **em ordem** para diagnosticar rapidamente:
 
 ## 📊 TIMELINE DO DEBUGGING
 
-| Hora | Ação | Resultado | Causa |
-|------|------|-----------|--------|
-| 1h | Criar skill "Super Alexa" do zero | Retorna "Aqui está o que encontrei" | Interaction Model vazio |
-| 1h30 | Colar Interaction Model JSON, Build | Simulator retorna erro de resposta inválida | SyntaxError no Lambda (indentação) |
-| 2h | Corrigir docstring, deploiar | CloudWatch mostra SyntaxError na linha 18 | Indentação extra em todo o arquivo |
-| 2h30 | Remover indentação, deploiar | Menu funciona! Pode dizer "número 9" ✅ | Supostamente pronto |
-| 3h | Testar na Alexa real | "Apenas Um" não funciona | Intent matching falho |
-| 3h30 | Melhorar Interaction Model (+50 samples) | "Um" agora é reconhecido ✅ | Faltavam exemplos em português |
-| 4h | Adicionar função fallback | "Um" funciona 100% das vezes ✅ | Problema resolvido |
+| Hora | Data | Ação | Resultado | Causa | Causa Raiz |
+|------|------|------|-----------|--------|-----------|
+| 1h | 23 Fev | Criar skill "Super Alexa" do zero | Retorna "Aqui está o que encontrei" | Interaction Model vazio | #1 |
+| 1h30 | 23 Fev | Colar Interaction Model JSON, Build | Simulator retorna erro de resposta inválida | SyntaxError no Lambda (indentação) | #2 |
+| 2h | 23 Fev | Corrigir docstring, deploiar | CloudWatch mostra SyntaxError na linha 18 | Indentação extra em todo o arquivo | #2 |
+| 2h30 | 23 Fev | Remover indentação, deploiar | Menu funciona! Pode dizer "número 9" ✅ | Supostamente pronto | - |
+| 3h | 23 Fev | Testar na Alexa real | "Apenas Um" não funciona | Intent matching falho | #4 |
+| 3h30 | 23 Fev | Melhorar Interaction Model (+50 samples) | "Um" agora é reconhecido ✅ | Faltavam exemplos em português | #4 |
+| 4h | 23 Fev | Adicionar função fallback | "Um" funciona 100% das vezes ✅ | Problema resolvido | #5 |
+| 4h30 | 24 Fev | Usar Opus 4.6 com Adaptive Thinking | Diagnostica bug real: samples sem {numero} | AMAZON.NUMBER com palavras em pt-BR | #5 |
+| 5h | 24 Fev | Remover 64 samples do IM, adicionar duplo fallback | Menu completo: 9 → "abre Config" ✅ | Padrão NLU prefer literal match | #5 |
+| 5h30 | 25 Fev | Testar número 9 e depois 1 na Alexa | "9" abre Config, mas "1" retorna "Não entendi" | Menu 9 submenu sem handler | #6 |
+| 6h | 25 Fev | Adicionar handler de configurações | Número 9 → 1 funciona 100% ✅ | Faltava if menu_tipo == "configuracoes" | #6 |
 
 ---
 
