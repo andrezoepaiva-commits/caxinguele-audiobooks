@@ -193,14 +193,14 @@ def _selecionar_menu(numero, session):
                             end=False, session=session)
           return _listar_docs_como_submenu(docs, nome, session)
 
-      # ---------- Menu 2: Livros (filtro de documentos) ----------
+      # ---------- Menu 2: Livros ----------
       if tipo == "filtro":
           cat_filtro = cat.get("categoria", nome)
-          docs = [d for d in todos_docs if d.get("categoria", "") == cat_filtro]
-          if not docs:
-              return _resp(f"Nao ha conteudo em {nome} no momento. Diga outro numero.",
+          livros = [d for d in todos_docs if d.get("categoria", "") == cat_filtro]
+          if not livros:
+              return _resp(f"Nao ha livros catalogados no momento. Diga outro numero.",
                             end=False, session=session)
-          return _listar_docs_como_submenu(docs, nome, session)
+          return _menu_livros(livros, session)
 
       # ---------- Menu 3: Favoritos ----------
       if tipo == "favoritos":
@@ -208,10 +208,7 @@ def _selecionar_menu(numero, session):
 
       # ---------- Menu 4: Musica ----------
       if tipo == "musica":
-          return _resp(
-              f"{nome}. As playlists sao gerenciadas pelo aplicativo. "
-              "Diga outro numero ou diga voltar.",
-              end=False, session=session)
+          return _menu_musicas(session)
 
       # ---------- Menu 5: Calendario e Compromissos ----------
       if tipo == "calendario":
@@ -244,6 +241,70 @@ def _selecionar_menu(numero, session):
       # Fallback: tipo desconhecido
       return _resp(f"{nome}. Este menu ainda nao esta disponivel por voz. Diga outro numero.",
                     end=False, session=session)
+
+
+# ==================== MENU [4]: MUSICAS CAXINGUELE ====================
+
+# URLs das musicas — após upload para o Google Drive ou S3, atualize aqui
+MUSICAS_CAXINGUELE = [
+    {"numero": 1, "titulo": "Música 1",  "url": ""},
+    {"numero": 2, "titulo": "Música 2",  "url": ""},
+    {"numero": 3, "titulo": "Música 3",  "url": ""},
+    {"numero": 4, "titulo": "Música 4",  "url": ""},
+    {"numero": 5, "titulo": "Música 5",  "url": ""},
+    {"numero": 6, "titulo": "Música 6",  "url": ""},
+    {"numero": 7, "titulo": "Música 7",  "url": ""},
+    {"numero": 8, "titulo": "Música 8",  "url": ""},
+]
+
+
+def _menu_musicas(session):
+      """Lista musicas Caxinguele numeradas."""
+      musicas = [m for m in MUSICAS_CAXINGUELE if m.get("url")]
+      if not musicas:
+          return _resp(
+              "Musicas Caxinguele. As musicas estao sendo preparadas. "
+              "Em breve estao disponiveis aqui. "
+              f"{NUM_VOLTAR} para voltar.",
+              end=False, session=session)
+      partes = [f"{m['numero']}. {m['titulo']}" for m in musicas]
+      texto = (
+          f"Musicas Caxinguele. {len(musicas)} musica{'s' if len(musicas) > 1 else ''} disponivel{'is' if len(musicas) > 1 else ''}. "
+          f"{'. '.join(partes)}. "
+          f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar. "
+          "Qual numero quer ouvir?"
+      )
+      new_session = {
+          **session,
+          "nivel":     "submenu",
+          "menu_tipo": "musicas",
+          "musicas":   json.dumps(musicas),
+      }
+      return _resp(texto, end=False, reprompt="Diga o numero da musica.", session=new_session)
+
+
+# ==================== MENU [2]: LIVROS ====================
+
+def _menu_livros(livros, session):
+      """Lista livros catalogados numerados. Amigo escolhe → opcoes de leitura."""
+      partes = []
+      for i, livro in enumerate(livros, 1):
+          titulo = _titulo_curto(livro.get("titulo", "Sem titulo"))
+          partes.append(f"{i}. {titulo}")
+
+      texto = (
+          f"Livros. Voce tem {len(livros)} livro{'s' if len(livros) > 1 else ''} catalogado{'s' if len(livros) > 1 else ''}. "
+          f"{'. '.join(partes)}. "
+          f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar. "
+          "Qual livro quer ouvir?"
+      )
+      new_session = {
+          **session,
+          "nivel":     "submenu",
+          "menu_tipo": "livros",
+          "livros":    json.dumps(livros),
+      }
+      return _resp(texto, end=False, reprompt="Diga o numero do livro.", session=new_session)
 
 
 # ==================== MENU [9]: CONFIGURACOES — VOZES E VELOCIDADES ====================
@@ -425,6 +486,62 @@ def _menu_listas(session):
 def _selecionar_submenu(numero, session):
       """Amigo escolheu uma opcao dentro de um menu."""
       menu_tipo = session.get("menu_tipo", "")
+
+      # ---------- Musicas: amigo escolheu musica ----------
+      if menu_tipo == "musicas":
+          musicas = _obter_json(session, "musicas") or []
+          if numero == NUM_REPETIR:
+              return _menu_musicas(session)
+          if numero == NUM_VOLTAR:
+              return _voltar_menu_principal(session)
+          musica = next((m for m in musicas if m.get("numero") == numero), None)
+          if not musica:
+              return _resp(
+                  f"Numero invalido. Diga um numero entre 1 e {len(musicas)}. "
+                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+                  end=False, session=session)
+          url = musica.get("url", "")
+          titulo = musica.get("titulo", f"Musica {numero}")
+          if url:
+              _registrar_uso(titulo, "play_musica")
+              return _build_audio(titulo, url)
+          return _resp(f"{titulo} ainda nao disponivel. Diga outro numero.", end=False, session=session)
+
+      # ---------- Livros: amigo escolheu livro → opcoes de leitura ----------
+      if menu_tipo == "livros":
+          livros = _obter_json(session, "livros") or []
+          if numero == NUM_REPETIR:
+              return _menu_livros(livros, session)
+          if numero == NUM_VOLTAR:
+              return _voltar_menu_principal(session)
+          if not (1 <= numero <= len(livros)):
+              return _resp(
+                  f"Numero invalido. Ha {len(livros)} livros. Diga um numero entre 1 e {len(livros)}. "
+                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+                  end=False, session=session)
+          livro = livros[numero - 1]
+          titulo = _titulo_curto(livro.get("titulo", "Sem titulo"))
+          # Verifica se tem capitulo salvo para continuar
+          capitulo_salvo = session.get("capitulo_salvo_" + str(numero - 1), "")
+          opcao_continuar = f"2 para Continuar do Capitulo {capitulo_salvo}. " if capitulo_salvo else ""
+          texto = (
+              f"{titulo}. O que quer fazer? "
+              "1 para Comecar a Ler do Inicio. "
+              f"{opcao_continuar}"
+              "3 para Sinopse do Livro. "
+              "4 para Adicionar aos Favoritos. "
+              "5 para Compartilhar. "
+              f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar."
+          )
+          new_session = {
+              **session,
+              "nivel":        "item",
+              "menu_tipo":    "livros",
+              "item_idx":     str(numero - 1),
+              "item_dados":   json.dumps(livro),
+              "livro_titulo": titulo,
+          }
+          return _resp(texto, end=False, session=new_session)
 
       # ---------- Calendario: amigo escolheu compromisso ----------
       if menu_tipo == "calendario":
@@ -676,6 +793,62 @@ def _selecionar_submenu(numero, session):
 def _selecionar_acao_item(numero, session):
       """Amigo esta vendo detalhes de um item e escolheu uma acao."""
       menu_tipo = session.get("menu_tipo", "")
+
+      # ---------- Livros: amigo escolheu acao ----------
+      if menu_tipo == "livros":
+          livro = _obter_json(session, "item_dados") or {}
+          titulo = session.get("livro_titulo", livro.get("titulo", "?"))
+          url = livro.get("url_audio", "")
+          item_idx = session.get("item_idx", "0")
+          if numero == NUM_REPETIR:
+              capitulo_salvo = session.get("capitulo_salvo_" + item_idx, "")
+              opcao_continuar = f"2 para Continuar do Capitulo {capitulo_salvo}. " if capitulo_salvo else ""
+              return _resp(
+                  f"{titulo}. 1 para Comecar do Inicio. {opcao_continuar}"
+                  "3 para Sinopse. 4 para Favoritos. 5 para Compartilhar. "
+                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+                  end=False, session=session)
+          if numero == NUM_VOLTAR:
+              livros = _obter_json(session, "livros") or []
+              return _menu_livros(livros, session)
+          if numero == 1:
+              # Comecar do inicio
+              if url:
+                  _registrar_uso(titulo, "play_livro_inicio")
+                  new_session = {**session, "capitulo_atual": "1"}
+                  return _build_audio(titulo, url)
+              return _resp(f"{titulo} nao tem audio disponivel.", end=False, session=session)
+          if numero == 2:
+              # Continuar do capitulo salvo
+              capitulo_salvo = session.get("capitulo_salvo_" + item_idx, "")
+              if capitulo_salvo and url:
+                  _registrar_uso(titulo, "play_livro_continuar")
+                  return _build_audio(f"{titulo} — Capitulo {capitulo_salvo}", url)
+              return _resp(
+                  f"Nenhum progresso salvo para {titulo}. Diga 1 para comecar do inicio. "
+                  f"{NUM_VOLTAR} para voltar.",
+                  end=False, session=session)
+          if numero == 3:
+              sinopse = livro.get("sinopse", "Sinopse nao disponivel para este livro.")
+              return _resp(
+                  f"Sinopse de {titulo}. {sinopse}. "
+                  "1 para Comecar a Ler. "
+                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+                  end=False, session=session)
+          if numero == 4:
+              return _resp(
+                  f"{titulo} adicionado aos Favoritos. "
+                  f"{NUM_VOLTAR} para voltar.",
+                  end=False, session={**session, "acao_pendente": "favoritar_livro"})
+          if numero == 5:
+              return _resp(
+                  f"Para compartilhar {titulo}, acesse o aplicativo Caxinguele no celular. "
+                  f"{NUM_VOLTAR} para voltar.",
+                  end=False, session=session)
+          return _resp(
+              "Opcao invalida. 1 para ler. 3 para sinopse. 4 para favoritos. "
+              f"{NUM_VOLTAR} para voltar.",
+              end=False, session=session)
 
       # ---------- Calendario: editar ou remover compromisso ----------
       if menu_tipo == "calendario":
