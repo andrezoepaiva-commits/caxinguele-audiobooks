@@ -37,6 +37,7 @@ from config import PERFIS_USUARIOS, DESTINATARIO_PADRAO
 from labirinto_ui import abrir_labirinto
 from analytics_manager import abrir_analytics, registrar_envio
 from gmail_monitor import abrir_verificar_emails
+from enviar_musica_ui import abrir_enviar_musica
 
 # ==================== CORES ====================
 
@@ -173,7 +174,7 @@ class AudiobookGUI:
         for widget in [self.frame_drop, self.label_drop_icone, self.label_arquivo, self.label_tipo]:
             widget.bind("<Button-1>", lambda e: self._selecionar_arquivo())
 
-        # Botão principal: Enviar Documento
+        # Botões principais: Enviar Documento + Enviar Música (lado a lado)
         frame_btn_abrir = tk.Frame(col_esq, bg=C["bg"])
         frame_btn_abrir.pack(fill="x", pady=(4, 0))
 
@@ -186,6 +187,16 @@ class AudiobookGUI:
                   activebackground="#5a52e0",
                   activeforeground="white"
                   ).pack(side="right")
+
+        tk.Button(frame_btn_abrir, text="🎵 Enviar Música",
+                  command=self._enviar_musica,
+                  bg="#2a4a2a", fg=C["ok"],
+                  font=("Segoe UI", 10, "bold"),
+                  relief="flat", cursor="hand2",
+                  padx=4, pady=5,
+                  activebackground="#1e3a1e",
+                  activeforeground=C["ok"]
+                  ).pack(side="right", padx=(0, 6))
 
         # -- NOME --
         self._secao(col_esq, "2   Nome  (aparece na Alexa)")
@@ -707,6 +718,10 @@ class AudiobookGUI:
             self._escrever_log(f"Email carregado: {nome_sugerido}", "ok")
 
         abrir_verificar_emails(self.root, on_email_selecionado)
+
+    def _enviar_musica(self):
+        """Abre o dialog para enviar uma música para a Alexa."""
+        abrir_enviar_musica(self.root)
 
     def _abrir_labirinto(self):
         """Abre o Labirinto de Numeros da Alexa"""

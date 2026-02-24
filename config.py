@@ -47,7 +47,7 @@ VOZES_PT_BR = {
 }
 
 # Voz padrão (recomendada) - armazenar como CHAVE, não como valor
-VOZ_PADRAO = "francisca"
+VOZ_PADRAO = "thalita"
 
 # ==================== SERVIDORES EDGE-TTS (FALLBACK) ====================
 
