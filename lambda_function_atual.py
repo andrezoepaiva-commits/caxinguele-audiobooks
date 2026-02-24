@@ -30,16 +30,18 @@ logger.setLevel(logging.INFO)
 RSS_BASE_URL = "https://andrezoepaiva-commits.github.io/caxinguele-audiobooks"
 
 # Menu padrao sincronizado com o Labirinto de Numeros
+# Numeracao sequencial: 0-8 sao opcoes, 9 = voltar ao menu principal
 MENU_DEFAULT = [
-      {"numero": 0,  "nome": "Organizacoes Mentais",           "tipo": "gravacao"},
-      {"numero": 1,  "nome": "Ultimas Atualizacoes",           "tipo": "recentes"},
-      {"numero": 2,  "nome": "Livros",                          "tipo": "filtro",  "categoria": "Livros"},
-      {"numero": 3,  "nome": "Favoritos Importantes",           "tipo": "favoritos"},
-      {"numero": 4,  "nome": "Musica",                          "tipo": "musica"},
-      {"numero": 5,  "nome": "Calendario e Compromissos",       "tipo": "calendario"},
-      {"numero": 8,  "nome": "Reunioes Caxinguele",             "tipo": "reunioes"},
-      {"numero": 9,  "nome": "Configuracoes",                   "tipo": "configuracoes"},
-      {"numero": 10, "nome": "Organizacoes da Mente em Listas", "tipo": "listas_mentais"},
+      {"numero": 0, "nome": "Organizacoes Mentais",           "tipo": "gravacao"},
+      {"numero": 1, "nome": "Ultimas Atualizacoes",           "tipo": "recentes"},
+      {"numero": 2, "nome": "Livros",                          "tipo": "filtro",  "categoria": "Livros"},
+      {"numero": 3, "nome": "Favoritos Importantes",           "tipo": "favoritos"},
+      {"numero": 4, "nome": "Musica",                          "tipo": "musica"},
+      {"numero": 5, "nome": "Calendario e Compromissos",       "tipo": "calendario"},
+      {"numero": 6, "nome": "Reunioes Caxinguele",             "tipo": "reunioes"},
+      {"numero": 7, "nome": "Organizacoes da Mente em Listas", "tipo": "listas_mentais"},
+      {"numero": 8, "nome": "Configuracoes",                   "tipo": "configuracoes"},
+      {"numero": 9, "nome": "Voltar ao Menu Principal",        "tipo": "voltar_menu"},
 ]
 
 # Numeros especiais reservados para navegacao
@@ -228,9 +230,16 @@ def _selecionar_menu(numero, session):
               end=False,
               session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
 
-      # ---------- Menu 10: Listas Mentais ----------
+      # ---------- Menu 7: Listas Mentais ----------
       if tipo == "listas_mentais":
           return _menu_listas(session)
+
+      # ---------- Menu 8: Configuracoes ----------
+      # (handler ja existente, mantido abaixo)
+
+      # ---------- Menu 9: Voltar ao Menu Principal ----------
+      if tipo == "voltar_menu":
+          return _voltar_menu_principal(session)
 
       # Fallback: tipo desconhecido
       return _resp(f"{nome}. Este menu ainda nao esta disponivel por voz. Diga outro numero.",
@@ -240,12 +249,18 @@ def _selecionar_menu(numero, session):
 # ==================== MENU [9]: CONFIGURACOES — VOZES E VELOCIDADES ====================
 
 def _menu_config_vozes(session):
-      """Lista vozes disponiveis para o amigo escolher."""
-      vozes = ["Camila", "Vitoria", "Ricardo", "Thiago"]
+      """Lista vozes disponiveis para o amigo escolher (vozes pt-BR do AWS Polly)."""
+      # Todas as vozes brasileiras disponíveis no AWS Polly (Neural/Generative)
+      vozes = [
+          "Camila, feminina, a mais natural",
+          "Vitoria, feminina, muito natural",
+          "Thiago, masculina, muito natural",
+          "Ricardo, masculina, classica",
+      ]
       partes = [f"{i} para {v}" for i, v in enumerate(vozes, 1)]
       texto = (
           "Escolher Voz de Hoje. "
-          f"Ha {len(vozes)} opcoes de voz. {'. '.join(partes)}. "
+          f"Ha {len(vozes)} opcoes de voz brasileira. {'. '.join(partes)}. "
           f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar."
       )
       return _resp(texto, end=False, reprompt="Diga o numero da voz.",
@@ -341,11 +356,20 @@ def _menu_reunioes(session):
       reunioes = _ordenar_reunioes(reunioes)
       partes = []
       for i, r in enumerate(reunioes, 1):
-          partes.append(f"{i}: {r.get('titulo', '?')}, dia {r.get('data', '?')}")
+          # Formato: "Reuniao do dia DD/MM/YYYY" — usa data se disponivel, titulo como fallback
+          data = r.get('data', '')
+          titulo = r.get('titulo', '')
+          if data:
+              descricao = f"Reuniao do dia {data}"
+          elif titulo:
+              descricao = titulo
+          else:
+              descricao = f"Reuniao {i}"
+          partes.append(f"{i}. {descricao}")
 
       texto = (
           f"Reunioes Caxinguele. "
-          f"Voce tem {len(reunioes)} reunia{'o' if len(reunioes) == 1 else 'oes'}. "
+          f"Voce tem {len(reunioes)} reunia{'o' if len(reunioes) == 1 else 'oes'} registrada{'s' if len(reunioes) > 1 else ''}. "
           f"{'. '.join(partes)}. "
           f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar. "
           "Qual reuniao quer ouvir?"
@@ -439,9 +463,11 @@ def _selecionar_submenu(numero, session):
                   f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
                   end=False, session=session)
           reu = reunioes[numero - 1]
+          data_reu = reu.get('data', '')
+          titulo_reu = reu.get('titulo', f'Reuniao {numero}')
+          nome_reu = f"Reuniao do dia {data_reu}" if data_reu else titulo_reu
           texto = (
-              f"Reuniao {numero}: {reu.get('titulo', '?')}, dia {reu.get('data', '?')}. "
-              "Como quer ouvir? "
+              f"{nome_reu}. Como quer ouvir? "
               "1 para Resumo em Topicos Frasais. "
               "2 para Resumo Pragmatico. "
               "3 para Audio na Integra. "
@@ -607,15 +633,15 @@ def _selecionar_submenu(numero, session):
                   "Configuracoes. 1 para Escolher Voz. 2 para Velocidade da Fala. 3 para Guia do Usuario. "
                   f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
                   end=False, session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
-          vozes = ["Camila", "Vitoria", "Ricardo", "Thiago"]
-          if not (1 <= numero <= len(vozes)):
-              return _resp(f"Opcao invalida. Escolha entre 1 e {len(vozes)}.",
+          nomes_vozes = ["Camila", "Vitoria", "Thiago", "Ricardo"]
+          if not (1 <= numero <= len(nomes_vozes)):
+              return _resp(f"Opcao invalida. Escolha entre 1 e {len(nomes_vozes)}.",
                             end=False, session=session)
-          voz_escolhida = vozes[numero - 1]
+          voz_escolhida = nomes_vozes[numero - 1]
           return _resp(
               f"Voz {voz_escolhida} selecionada. "
-              "Para ativar esta voz, acesse as Configuracoes da Alexa no aplicativo e selecione a voz desejada. "
-              f"{NUM_VOLTAR} para voltar.",
+              "Para ativar, acesse Configuracoes da Alexa no aplicativo, va em Voz da Alexa e escolha a voz desejada. "
+              f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
               end=False, session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
 
       # ---------- Configuracoes: escolher velocidade ----------
