@@ -1,0 +1,54 @@
+{
+  "musicas": [
+    {
+      "numero": 1,
+      "titulo": "Música 1",
+      "artista": "Músicas Caxinguele",
+      "url": "https://drive.google.com/uc?export=download&id=1cpJMGk0nTAxgkcEuZLK3oqSWYl1e0pXH"
+    },
+    {
+      "numero": 2,
+      "titulo": "Música 2",
+      "artista": "Caxinguele",
+      "url": ""
+    },
+    {
+      "numero": 3,
+      "titulo": "Música 3",
+      "artista": "Caxinguele",
+      "url": ""
+    },
+    {
+      "numero": 4,
+      "titulo": "Música 4",
+      "artista": "Caxinguele",
+      "url": ""
+    },
+    {
+      "numero": 5,
+      "titulo": "Música 5",
+      "artista": "Caxinguele",
+      "url": ""
+    },
+    {
+      "numero": 6,
+      "titulo": "Música 6",
+      "artista": "Caxinguele",
+      "url": ""
+    },
+    {
+      "numero": 7,
+      "titulo": "Música 7",
+      "artista": "Caxinguele",
+      "url": ""
+    },
+    {
+      "numero": 8,
+      "titulo": "Música 8",
+      "artista": "Caxinguele",
+      "url": ""
+    }
+  ],
+  "instrucoes": "Edite para gerenciar músicas. URL = link direto do Google Drive.",
+  "atualizado_em": "2026-02-25"
+}
