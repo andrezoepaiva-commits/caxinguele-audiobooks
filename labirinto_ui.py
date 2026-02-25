@@ -1,5 +1,5 @@
 """
-Labirinto de Numeros da Alexa — Projeto Caxinguele v2
+Super Alexa — Labirinto de Números v2
 
 Visualiza e edita como o amigo cego navega pelos conteudos:
   Nivel 1: Alexa enumera CATEGORIAS  (Livros=2, Artigos=3...)
@@ -191,7 +191,7 @@ class LabirintoUI:
     def __init__(self, parent):
         self.parent = parent
         self.win = tk.Toplevel(parent)
-        self.win.title("Labirinto de Numeros da Alexa")
+        self.win.title("Super Alexa — Labirinto de Números")
         self.win.geometry("840x600")
         self.win.configure(bg=C["bg"])
         self.win.resizable(True, True)
