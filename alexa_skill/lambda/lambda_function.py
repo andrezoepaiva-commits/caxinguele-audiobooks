@@ -625,7 +625,8 @@ def _menu_calendario(session):
       if not compromissos:
           return _resp(
               "Calendario. Voce nao tem compromissos agendados. "
-              "Diga outro numero ou diga voltar.",
+              "Adicione compromissos falando sobre eles no menu Organizacoes Mentais. "
+              f"{NUM_VOLTAR} para voltar.",
               end=False, session=session)
 
       # Ordena: mais proximo primeiro
@@ -1227,6 +1228,14 @@ def _selecionar_acao_item(numero, session):
                   f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
                   end=False, session={**session, "nivel": "item", "menu_tipo": "reunioes"})
           if numero == 3:
+              # Toca o áudio original se disponível; senão lê a transcrição
+              audio_url = reu.get("audio_url", "") or reu.get("url_audio", "")
+              if audio_url:
+                  # Toca o arquivo de áudio original
+                  _registrar_uso(titulo_reu, "play_reuniao_audio")
+                  return _build_audio(f"Audio da reuniao {titulo_reu}", audio_url)
+
+              # Fallback: lê a transcrição se não houver áudio
               transcricao = reu.get("transcricao", "")
               if transcricao:
                   return _resp(
@@ -1234,7 +1243,7 @@ def _selecionar_acao_item(numero, session):
                       f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
                       end=False, session={**session, "nivel": "item", "menu_tipo": "reunioes"})
               return _resp(
-                  f"Transcricao nao disponivel para {titulo_reu}. "
+                  f"Audio e transcricao nao disponiveis para {titulo_reu}. "
                   "1 para topicos frasais. 2 para resumo pragmatico. "
                   f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
                   end=False, session=session)
