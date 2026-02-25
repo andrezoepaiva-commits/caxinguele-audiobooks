@@ -56,7 +56,7 @@ class EnviarMusicaDialog:
 
         self.win = tk.Toplevel(parent)
         self.win.title("Enviar Música para a Alexa")
-        self.win.geometry("520x540")
+        self.win.geometry("650x700")
         self.win.configure(bg=C["bg"])
         self.win.resizable(False, False)
         self.win.transient(parent)  # Janela filha, mas permite diálogos de seleção
