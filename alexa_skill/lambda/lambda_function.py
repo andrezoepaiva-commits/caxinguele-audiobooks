@@ -13,6 +13,7 @@
     [ultimo]    Voltar ao menu principal
 
   Menus editaveis por voz: [3] Favoritos, [5] Calendario, [8] Reunioes, [10] Listas
+  Numeracao alinhada com Labirinto: 0-5, 8, 9, 10 (6-7 reservados para futuro)
   """
 
 import json
@@ -32,18 +33,17 @@ logger.setLevel(logging.INFO)
 RSS_BASE_URL = "https://andrezoepaiva-commits.github.io/caxinguele-audiobooks"
 
 # Menu padrao sincronizado com o Labirinto de Numeros
-# Numeracao sequencial: 0-8 sao opcoes, 9 = voltar ao menu principal
+# Numeracao alinhada com Labirinto: 0-5, 8, 9, 10 (6-7 reservados para futuro)
 MENU_DEFAULT = [
-      {"numero": 0, "nome": "Organizacoes Mentais",           "tipo": "gravacao"},
-      {"numero": 1, "nome": "Ultimas Atualizacoes",           "tipo": "recentes"},
-      {"numero": 2, "nome": "Livros",                          "tipo": "filtro",  "categoria": "Livros"},
-      {"numero": 3, "nome": "Favoritos Importantes",           "tipo": "favoritos"},
-      {"numero": 4, "nome": "Musica",                          "tipo": "musica"},
-      {"numero": 5, "nome": "Calendario e Compromissos",       "tipo": "calendario"},
-      {"numero": 6, "nome": "Reunioes Caxinguele",             "tipo": "reunioes"},
-      {"numero": 7, "nome": "Organizacoes da Mente em Listas", "tipo": "listas_mentais"},
-      {"numero": 8, "nome": "Configuracoes",                   "tipo": "configuracoes"},
-      {"numero": 9, "nome": "Voltar ao Menu Principal",        "tipo": "voltar_menu"},
+      {"numero": 0,  "nome": "Organizacoes Mentais",           "tipo": "gravacao"},
+      {"numero": 1,  "nome": "Ultimas Atualizacoes",           "tipo": "recentes"},
+      {"numero": 2,  "nome": "Livros",                          "tipo": "filtro",  "categoria": "Livros"},
+      {"numero": 3,  "nome": "Favoritos Importantes",           "tipo": "favoritos"},
+      {"numero": 4,  "nome": "Musica",                          "tipo": "musica"},
+      {"numero": 5,  "nome": "Calendario e Compromissos",       "tipo": "calendario"},
+      {"numero": 8,  "nome": "Reunioes Caxinguele",             "tipo": "reunioes"},
+      {"numero": 9,  "nome": "Configuracoes",                   "tipo": "configuracoes"},
+      {"numero": 10, "nome": "Organizacoes da Mente em Listas", "tipo": "listas_mentais"},
 ]
 
 # Numeros especiais reservados para navegacao
@@ -241,6 +241,7 @@ def _selecionar_menu(numero, session):
 
       # ---------- Menu 9: Configuracoes ----------
       if tipo == "configuracoes":
+
           return _resp(
               f"{nome}. 1 para Velocidade da Fala. "
               "2 para Guia do Usuario. "
@@ -248,16 +249,9 @@ def _selecionar_menu(numero, session):
               end=False,
               session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
 
-      # ---------- Menu 7: Listas Mentais ----------
+      # ---------- Menu 10: Organizacoes da Mente em Listas ----------
       if tipo == "listas_mentais":
           return _menu_listas(session)
-
-      # ---------- Menu 8: Configuracoes ----------
-      # (handler ja existente, mantido abaixo)
-
-      # ---------- Menu 9: Voltar ao Menu Principal ----------
-      if tipo == "voltar_menu":
-          return _voltar_menu_principal(session)
 
       # Fallback: tipo desconhecido
       return _resp(f"{nome}. Este menu ainda nao esta disponivel por voz. Diga outro numero.",

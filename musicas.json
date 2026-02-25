@@ -3,8 +3,8 @@
     {
       "numero": 1,
       "titulo": "Música 1",
-      "artista": "Caxinguele",
-      "url": ""
+      "artista": "Músicas Caxinguele",
+      "url": "https://drive.google.com/uc?export=download&id=1cpJMGk0nTAxgkcEuZLK3oqSWYl1e0pXH"
     },
     {
       "numero": 2,
@@ -49,6 +49,6 @@
       "url": ""
     }
   ],
-  "instrucoes": "Para adicionar musica: 1) Faca upload do .wav ou .mp3 para Google Drive ou S3. 2) Copie o link direto. 3) Cole no campo url desta musica. 4) Commite este arquivo. A Alexa atualiza automaticamente.",
-  "atualizado_em": "2026-02-24"
+  "instrucoes": "Edite para gerenciar músicas. URL = link direto do Google Drive.",
+  "atualizado_em": "2026-02-25"
 }
