@@ -583,27 +583,6 @@ def _menu_livros(docs_brutos, session, categoria_nome=""):
 
 # ==================== MENU [9]: CONFIGURACOES — VOZES E VELOCIDADES ====================
 
-def _menu_config_vozes(session):
-      """Lista vozes disponiveis para o amigo escolher (vozes pt-BR de melhor qualidade)."""
-      # Vozes de melhor qualidade: 3 do AWS Polly + 3 do Azure
-      vozes = [
-          "Camila, feminina, a mais natural e fluida, AWS Polly",
-          "Vitoria, feminina, muito natural e suave, AWS Polly",
-          "Thiago, masculino, natural e claro, AWS Polly",
-          "Francisca, feminina jovem, expressiva e natural, Azure",
-          "Thalita, feminina, suave e delicada, Azure",
-          "Antonio, masculino, claro e articulado, Azure",
-      ]
-      partes = [f"{i} para {v}" for i, v in enumerate(vozes, 1)]
-      texto = (
-          "Escolher Voz de Hoje. "
-          f"Ha {len(vozes)} opcoes de voz brasileira de qualidade. {'. '.join(partes)}. "
-          f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar."
-      )
-      return _resp(texto, end=False, reprompt="Diga o numero da voz.",
-                    session={**session, "nivel": "submenu", "menu_tipo": "config_vozes"})
-
-
 def _menu_config_velocidades(session):
       """Lista velocidades de fala disponiveis."""
       velocidades = ["Muito Devagar", "Devagar", "Normal", "Rapido", "Muito Rapido"]
