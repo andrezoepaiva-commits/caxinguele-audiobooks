@@ -186,7 +186,7 @@ def _titulo_curto(titulo):
 
 
 class LabirintoUI:
-    """Janela do Labirinto de Numeros da Alexa"""
+    """Janela do Labirinto de Números da Super Alexa"""
 
     def __init__(self, parent):
         self.parent = parent
@@ -216,7 +216,7 @@ class LabirintoUI:
         inner = tk.Frame(header, bg=C["painel"], padx=16)
         inner.pack(side="left", fill="both", expand=True)
 
-        tk.Label(inner, text="LABIRINTO DE NÚMEROS DA ALEXA",
+        tk.Label(inner, text="labirinto de números da Super Alexa",
                  font=("Segoe UI", 14, "bold"),
                  bg=C["painel"], fg=C["texto"]).pack(anchor="w")
 

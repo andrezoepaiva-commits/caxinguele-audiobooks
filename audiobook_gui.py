@@ -111,7 +111,7 @@ class AudiobookGUI:
         inner = tk.Frame(header, bg=C["painel"], padx=20, pady=14)
         inner.pack(side="left", fill="both", expand=True)
 
-        tk.Label(inner, text="PROJETO CAXINGUELE v2",
+        tk.Label(inner, text="SUPER ALEXA",
                  font=("Segoe UI", 16, "bold"),
                  bg=C["painel"], fg=C["texto"]).pack(anchor="w")
         tk.Label(inner, text="Audiobooks para Alexa  |  PDF, Word, EPUB, Email, Imagem e mais",

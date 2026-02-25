@@ -41,7 +41,7 @@ MENU_DEFAULT = [
       {"numero": 3,  "nome": "Favoritos Importantes",           "tipo": "favoritos"},
       {"numero": 4,  "nome": "Musica",                          "tipo": "musica"},
       {"numero": 5,  "nome": "Calendario e Compromissos",       "tipo": "calendario"},
-      {"numero": 8,  "nome": "Reunioes Caxinguele",             "tipo": "reunioes"},
+      {"numero": 6,  "nome": "Reunioes Caxinguele",             "tipo": "reunioes"},
       {"numero": 9,  "nome": "Configuracoes",                   "tipo": "configuracoes"},
       {"numero": 10, "nome": "Organizacoes da Mente em Listas", "tipo": "listas_mentais"},
 ]
