@@ -794,6 +794,87 @@ Se qualquer passo falhar, o dado fica invisível.
 
 ---
 
+## 🔴 CAUSA RAIZ #8: Livros recolhidos no Labirinto — 4 opções ocultas (24 Fev 2026)
+
+### Sintoma
+- Labirinto mostra [2] Livros e as categorias [1] e [2]
+- Dentro de cada categoria, livro aparece (ex: "1. Livro sem nome (1 cap.)")
+- **Mas as 4 opções (Começar do Início, Continuar, Escolher Capítulo, Sinopse) NÃO aparecem**
+- Usuário acha que as opções não foram implementadas
+
+### Diagnóstico
+**As 4 opções EXISTIAM na árvore, mas estavam ocultas.**
+
+Em `labirinto_ui.py`, o nó do livro era inserido com `open=False`:
+```python
+self.tree.insert(opt_iid, "end",
+    iid=livro_iid,
+    text=f"  {i}.   {livro['titulo']}  ({n_caps} cap.)",
+    open=False)  # ← COLLAPSED: filhos não aparecem visualmente
+```
+
+As 4 opções são FILHOS deste nó. Com `open=False`, elas ficam recolhidas. O usuário precisaria clicar no `▶` para expandi-las — e não sabia que estavam lá.
+
+### Solução
+Mudar `open=False` para `open=True` na inserção do nó do livro:
+```python
+self.tree.insert(opt_iid, "end",
+    iid=livro_iid,
+    text=f"  {i}.   {livro['titulo']}  ({n_caps} cap.)",
+    open=True)  # Mostra as 4 opções expandidas por padrão
+```
+
+**Arquivo:** `labirinto_ui.py`, linha ~579
+
+---
+
+## 🔴 CAUSA RAIZ #9: LIVROS_CATEGORIAS com filtro incompatível com indice.json (24 Fev 2026)
+
+### Sintoma
+- Alexa diz as categorias (1. Inteligência Sensorial, 2. Geral) ✅
+- Usuário diz "1" ou "2"
+- **Alexa responde: "Nenhum livro catalogado em Inteligência Sensorial"** ❌
+- Usuário NUNCA consegue selecionar um livro, logo nunca vê as 4 opções por voz
+
+### Diagnóstico
+Em `lambda_function.py`, `LIVROS_CATEGORIAS` tinha filtros errados:
+```python
+LIVROS_CATEGORIAS = [
+    {"numero": 1, "nome": "Inteligencia Sensorial", "filtro": "Inteligencia Sensorial"},  # ❌
+    {"numero": 2, "nome": "Geral",                   "filtro": "Geral"},                  # ❌
+]
+```
+
+O Lambda filtra documentos assim:
+```python
+cat_filtro = cat.get("filtro")  # → "Inteligencia Sensorial"
+docs_livros = [d for d in todos_docs if d.get("categoria", "") == cat_filtro]
+# → VAZIO! Docs têm categoria="Livros", não "Inteligencia Sensorial"
+```
+
+**Por quê?** Os documentos no `indice.json` têm `"categoria": "Livros"` (categoria genérica). As subcategorias "Inteligência Sensorial" e "Geral" são **intenção futura**, não a realidade atual dos dados.
+
+### Fluxo do bug:
+1. User diz "1" → filtro tenta buscar docs com `categoria == "Inteligencia Sensorial"`
+2. Nenhum doc tem essa categoria → `docs_livros = []`
+3. `_menu_livros([], session)` → `if not livros: return "Nenhum livro catalogado..."`
+4. Lambda responde com erro "vazio" → usuário nunca escolhe livro → nunca vê 4 opções
+
+### Solução
+Mudar filtro para "Livros" (categoria real dos documentos) para ambas as subcategorias:
+```python
+LIVROS_CATEGORIAS = [
+    {"numero": 1, "nome": "Inteligencia Sensorial", "filtro": "Livros"},  # ✅
+    {"numero": 2, "nome": "Geral",                   "filtro": "Livros"},  # ✅
+]
+```
+
+**Nota:** No futuro, quando o pipeline de upload distinguir subcategorias, atualizar o `filtro` para o valor exato usado ao catalogar (ex: `"Livros: Inteligencia Sensorial"`). Por enquanto, ambas mostram todos os livros.
+
+**Arquivo:** `lambda_function.py`, linhas 528-531
+
+---
+
 ## 📊 TIMELINE DO DEBUGGING (atualizada)
 
 | Hora | Data | Ação | Resultado | Causa Raiz |
@@ -812,6 +893,10 @@ Se qualquer passo falhar, o dado fica invisível.
 | 6h30 | 24 Fev | Adicionar categorias ao JSON | Labirinto ignora | #7 |
 | 7h | 24 Fev | Opus: _popular_tree hardcoded | Código não lê opcoes | #7 |
 | 7h30 | 24 Fev | Corrigir bloco else + MENU_PADRAO | Categorias visíveis ✅ | #7 |
+| 8h | 24 Fev | Livros recolhidos (open=False) | 4 opções ocultas | #8 |
+| 8h15 | 24 Fev | open=True no nó do livro | Opções visíveis ✅ | #8 |
+| 8h30 | 24 Fev | LIVROS_CATEGORIAS filtro errado | "Nenhum livro" no voice | #9 |
+| 8h45 | 24 Fev | Filtro → "Livros" (categoria real) | Alexa acha livros ✅ | #9 |
 
 ---
 
@@ -828,6 +913,16 @@ Se qualquer passo falhar, o dado fica invisível.
 - Tipo "filtro" usa o bloco `else` (genérico)
 - Se adicionar novo campo a um tipo, verifique se o **bloco correto** lê esse campo
 - Os blocos `elif` anteriores podem servir de modelo
+
+### 9. open=False esconde filhos — use open=True para opções visíveis
+- Em `ttk.Treeview`, nós com `open=False` ocultam todos os filhos
+- Use `open=True` quando quer que as opções sejam visíveis ao abrir
+- Regra: **nós de folha** (sem filhos) → `open=False` não importa; **nós com filhos relevantes** → `open=True`
+
+### 10. Filtro vs. Categoria real — sempre verificar o que o dado realmente tem
+- `LIVROS_CATEGORIAS["filtro"]` deve bater com `documento["categoria"]` no indice.json
+- Subcategorias futuras precisam ser implementadas tanto no **pipeline de upload** quanto no **filtro do Lambda**
+- Antes de definir um filtro, verificar quais valores exatos existem no `indice.json`
 
 ---
 
@@ -858,4 +953,4 @@ Mantenha estes arquivos no Desktop para referência rápida:
 
 **Fim do Relatório**
 *Atualizado em 24 de Fevereiro, 2026*
-*Situação: ✅ Skill funcionando | ✅ Labirinto com categorias*
+*Situação: ✅ Skill funcionando | ✅ Labirinto com categorias e 4 opções visíveis | ✅ Lambda filtra por categoria correta*

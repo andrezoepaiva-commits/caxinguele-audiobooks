@@ -145,12 +145,18 @@ MENU_PADRAO = [
          {"numero": 3, "nome": "Áudio na íntegra"},
      ]},
 
-    # Menu 9 — Configurações (Voz / Velocidade / Guia)
+    # Menu 9 — Configurações (Velocidade / Guia)
     {"numero": 9,  "nome": "Configurações",           "tipo": "configuracoes",
      "opcoes": [
-         {"numero": 1, "nome": "Escolher Voz de Hoje"},
-         {"numero": 2, "nome": "Velocidade da Fala"},
-         {"numero": 3, "nome": "Guia do Usuário"},
+         {"numero": 1, "nome": "Velocidade da Fala",
+          "sub": [
+              {"numero": 1, "nome": "Muito Devagar"},
+              {"numero": 2, "nome": "Devagar"},
+              {"numero": 3, "nome": "Normal"},
+              {"numero": 4, "nome": "Rápido"},
+              {"numero": 5, "nome": "Muito Rápido"},
+          ]},
+         {"numero": 2, "nome": "Guia do Usuário"},
      ]},
 
     # Menu 10 — Listas de anotações mentais com Editar
@@ -451,12 +457,12 @@ class LabirintoUI:
                                    iid=opt_iid,
                                    text=f"              {opt['numero']}.   {opt['nome']}",
                                    values=("modo de escuta",), tags=("documento",))
-                # Repetir / Voltar (padrão em todos)
+                # 98/99 padrão universal
                 self.tree.insert(cat_iid, "end",
-                               text=f"              4.   Repetir opções",
+                               text=f"              98.   Repetir opções",
                                values=("navegação",), tags=("cat_vazio",))
                 self.tree.insert(cat_iid, "end",
-                               text=f"              5.   Voltar ao menu principal",
+                               text=f"              99.   Voltar ao menu principal",
                                values=("navegação",), tags=("cat_vazio",))
 
             elif tipo in ("configuracoes", "favoritos", "musica", "calendario"):
@@ -481,13 +487,12 @@ class LabirintoUI:
                         self.tree.insert(opt_iid, "end",
                                        text=f"                    {sub.get('numero')}.   {sub.get('nome')}",
                                        values=("",), tags=("documento",))
-                # Repetir / Voltar (padrão em todos os submenus)
-                prox_num = len(opcoes) + 1
+                # 98/99 padrão universal
                 self.tree.insert(cat_iid, "end",
-                               text=f"          {prox_num}.   Repetir opções",
+                               text=f"          98.   Repetir opções",
                                values=("navegação",), tags=("cat_vazio",))
                 self.tree.insert(cat_iid, "end",
-                               text=f"          {prox_num + 1}.   Voltar ao menu principal",
+                               text=f"          99.   Voltar ao menu principal",
                                values=("navegação",), tags=("cat_vazio",))
 
             elif tipo == "listas_mentais":
@@ -514,13 +519,12 @@ class LabirintoUI:
                         self.tree.insert(lista_iid, "end",
                                        text=f"                    →   {sub}",
                                        values=("",), tags=("documento",))
-                # Repetir / Voltar
-                prox = len(listas) + 1
+                # 98/99 padrão universal
                 self.tree.insert(cat_iid, "end",
-                               text=f"          {prox}.   Repetir opções",
+                               text=f"          98.   Repetir opções",
                                values=("navegação",), tags=("cat_vazio",))
                 self.tree.insert(cat_iid, "end",
-                               text=f"          {prox + 1}.   Voltar ao menu principal",
+                               text=f"          99.   Voltar ao menu principal",
                                values=("navegação",), tags=("cat_vazio",))
 
             else:
@@ -576,7 +580,7 @@ class LabirintoUI:
                                                iid=livro_iid,
                                                text=f"                    {i}.   {livro['titulo']}  ({n_caps} cap.)",
                                                values=(f"{n_caps} cap.",),
-                                               tags=("documento",), open=False)
+                                               tags=("documento",), open=True)  # open=True mostra as 4 opções
 
                                 # Opções do livro (após seleção)
                                 if opcoes_livro_acao:

@@ -242,8 +242,8 @@ def _selecionar_menu(numero, session):
       # ---------- Menu 9: Configuracoes ----------
       if tipo == "configuracoes":
           return _resp(
-              f"{nome}. 1 para Escolher Voz. 2 para Velocidade da Fala. "
-              "3 para Guia do Usuario. "
+              f"{nome}. 1 para Velocidade da Fala. "
+              "2 para Guia do Usuario. "
               f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
               end=False,
               session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
@@ -524,10 +524,12 @@ def _menu_musicas(session):
 
 # ==================== MENU [2]: LIVROS COM CATEGORIAS ====================
 
-# Categorias de livros — adicione novas categorias aqui
+# Categorias de livros — o "filtro" deve bater com o campo "categoria" dos documentos no indice.json
+# Por enquanto todos os livros têm categoria="Livros", então ambas as categorias filtram por "Livros"
+# Futuramente: criar subcategorias no pipeline de upload (ex: "Livros: Inteligencia Sensorial")
 LIVROS_CATEGORIAS = [
-      {"numero": 1, "nome": "Inteligencia Sensorial", "filtro": "Inteligencia Sensorial"},
-      {"numero": 2, "nome": "Geral",                   "filtro": "Geral"},
+      {"numero": 1, "nome": "Inteligencia Sensorial", "filtro": "Livros"},
+      {"numero": 2, "nome": "Geral",                   "filtro": "Livros"},
 ]
 
 
@@ -1063,42 +1065,23 @@ def _selecionar_submenu(numero, session):
       if menu_tipo == "configuracoes":
           if numero == NUM_REPETIR:
               return _resp(
-                  "Configuracoes. 1 para Escolher Voz. 2 para Velocidade da Fala. 3 para Guia do Usuario. "
+                  "Configuracoes. 1 para Velocidade da Fala. 2 para Guia do Usuario. "
                   f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
                   end=False, session=session)
           if numero == NUM_VOLTAR:
               return _voltar_menu_principal(session)
           if numero == 1:
-              return _menu_config_vozes(session)
-          if numero == 2:
               return _menu_config_velocidades(session)
-          if numero == 3:
+          if numero == 2:
               return _resp(
                   "Guia do Usuario. Voce pode ouvir o menu de ajuda dizendo: Alexa, pede ajuda na super alexa. "
                   f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
                   end=False, session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
-          return _resp("Opcao invalida. 1 para Voz. 2 para Velocidade. 3 para Guia.",
+          return _resp("Opcao invalida. 1 para Velocidade. 2 para Guia.",
                         end=False, session=session)
 
       # ---------- Configuracoes: escolher voz ----------
-      if menu_tipo == "config_vozes":
-          if numero == NUM_REPETIR:
-              return _menu_config_vozes(session)
-          if numero == NUM_VOLTAR:
-              return _resp(
-                  "Configuracoes. 1 para Escolher Voz. 2 para Velocidade da Fala. 3 para Guia do Usuario. "
-                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
-                  end=False, session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
-          nomes_vozes = ["Camila", "Vitoria", "Thiago", "Francisca", "Thalita", "Antonio"]
-          if not (1 <= numero <= len(nomes_vozes)):
-              return _resp(f"Opcao invalida. Escolha entre 1 e {len(nomes_vozes)}.",
-                            end=False, session=session)
-          voz_escolhida = nomes_vozes[numero - 1]
-          return _resp(
-              f"Voz {voz_escolhida} selecionada. "
-              "Para ativar, acesse Configuracoes da Alexa no aplicativo, va em Voz da Alexa e escolha {voz_escolhida}. "
-              f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
-              end=False, session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
+      # config_vozes removido — opção Escolher Voz foi eliminada do menu Configurações
 
       # ---------- Configuracoes: escolher velocidade ----------
       if menu_tipo == "config_velocidades":
@@ -1106,7 +1089,7 @@ def _selecionar_submenu(numero, session):
               return _menu_config_velocidades(session)
           if numero == NUM_VOLTAR:
               return _resp(
-                  "Configuracoes. 1 para Escolher Voz. 2 para Velocidade da Fala. 3 para Guia do Usuario. "
+                  "Configuracoes. 1 para Velocidade da Fala. 2 para Guia do Usuario. "
                   f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
                   end=False, session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
           velocidades_nomes  = ["Muito Devagar", "Devagar", "Normal", "Rapido", "Muito Rapido"]

@@ -59,7 +59,7 @@ class EnviarMusicaDialog:
         self.win.geometry("520x540")
         self.win.configure(bg=C["bg"])
         self.win.resizable(False, False)
-        self.win.grab_set()  # Modal: bloqueia a janela pai enquanto aberta
+        self.win.transient(parent)  # Janela filha, mas permite diálogos de seleção
         self.win.focus_set()
 
         self._construir()

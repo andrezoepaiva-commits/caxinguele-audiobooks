@@ -136,14 +136,17 @@
     "opcoes": [
       {
         "numero": 1,
-        "nome": "Escolher Voz de Hoje"
+        "nome": "Velocidade da Fala",
+        "sub": [
+          {"numero": 1, "nome": "Muito Devagar"},
+          {"numero": 2, "nome": "Devagar"},
+          {"numero": 3, "nome": "Normal"},
+          {"numero": 4, "nome": "Rápido"},
+          {"numero": 5, "nome": "Muito Rápido"}
+        ]
       },
       {
         "numero": 2,
-        "nome": "Velocidade da Fala"
-      },
-      {
-        "numero": 3,
         "nome": "Guia do Usuário"
       }
     ]
