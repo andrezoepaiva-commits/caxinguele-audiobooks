@@ -954,3 +954,145 @@ Mantenha estes arquivos no Desktop para referência rápida:
 **Fim do Relatório**
 *Atualizado em 24 de Fevereiro, 2026*
 *Situação: ✅ Skill funcionando | ✅ Labirinto com categorias e 4 opções visíveis | ✅ Lambda filtra por categoria correta*
+
+---
+
+## 🔴 CAUSA RAIZ #10: código.txt ↔ lambda_function.py Desync (25 Fev 2026)
+
+### Sintoma
+- Alteração feita no `código.txt` (desktop)
+- Deploy realizado no Lambda Console
+- Mas `lambda_function.py` no repositório GitHub fica diferente
+- **Próxima vez que o usuário puxa o repo, suas mudanças sumiram**
+
+### Diagnóstico
+**O usuário mantinha DOIS arquivos separados:**
+1. `código.txt` — Arquivo de trabalho no Desktop (usado para Deploy no Lambda)
+2. `lambda_function.py` — Arquivo no repo (`alexa_skill/lambda/lambda_function.py`)
+
+Quando mudava o `código.txt` e fazia deploy, se depois alterava o repo apenas para editar em IDE, os arquivos saíam de sincronia.
+
+### Solução Aplicada
+**Manter sincronizado automaticamente:**
+```bash
+# Após fazer mudanças no código.txt:
+cp código.txt → alexa_skill/lambda/lambda_function.py
+git add, commit, push
+```
+
+**Regra de ouro:**
+1. Editar `código.txt` (arquivo principal)
+2. Testar no Lambda Console
+3. Deploy ✅
+4. Sincronizar para lambda_function.py
+5. Git commit + push
+6. **NUNCA editar `lambda_function.py` diretamente** — sempre via `código.txt`
+
+---
+
+## 🔴 CAUSA RAIZ #11: Navegação "voltar" monolítica vs. hierárquica (25 Fev 2026)
+
+### Sintoma (Antes)
+- Usuário está em: Menu [2] → Categorias → Livros → Capítulos
+- Diz "Alexa, voltar"
+- **Alexa volta DIRETO ao Menu Principal** (3 níveis de uma vez)
+- Usuário perdeu contexto
+
+### Diagnóstico (Antes)
+**Função `_voltar_menu_principal()` era universal:**
+```python
+if numero == NUM_VOLTAR:
+    return _voltar_menu_principal(session)  # Sempre menu 0
+```
+
+Com estrutura profunda (Menu → Submenu → Item), o usuário sentia-se teletransportado.
+
+### Solução Aplicada
+**Criar tabela `_PARENT_MENU` com navegação hierárquica:**
+```python
+_PARENT_MENU = {
+    "livros": "livros_categorias",  # Livros → Categorias
+    "livros_capitulos": "livros",   # Capítulos → Opções do Livro
+    "config_velocidades": "configuracoes",
+    # None = volta ao menu principal
+}
+```
+
+**Função nova:**
+```python
+def _voltar_nivel_anterior(session):
+    """Volta UM nível na hierarquia, não para menu principal."""
+    pai = _PARENT_MENU.get(menu_tipo)
+    if pai is None:
+        return _voltar_menu_principal(session)
+    else:
+        return _reconstruir_menu(pai, session)
+```
+
+**Fluxo novo (hierárquico):**
+```
+Capítulos → "voltar" → Livros → "voltar" → Categorias → "voltar" → Menu Principal
+```
+
+### Regra de ouro
+- Menu com **3+ níveis de profundidade** → SEMPRE use navegação hierárquica
+- Navegação monolítica é frustrante para usuários cegos (esperavam voltar 1 nível, voltaram 3)
+
+---
+
+## 📚 GUIA: Categorização de Livros — Como Funciona
+
+### Estrutura de diretórios
+```
+audiobooks/
+├── Inteligencia_sensorial/
+│   ├── Livro_A/ → 01-Cap1.mp3, 02-Cap2.mp3, ...
+│   └── Livro_B/
+└── Geral/
+    └── Livro_C/ → 01-Cap1.mp3, ...
+```
+
+### Como adicionar novo livro (manual)
+```bash
+mkdir -p audiobooks/Geral/Novo_Livro
+# Copie arquivos MP3 numerados: 01-Cap1.mp3, 02-Cap2.mp3, ...
+cp *.mp3 audiobooks/Geral/Novo_Livro/
+git add audiobooks/
+git commit -m "Novo livro"
+git push
+# Aguarde 30s → Teste na Alexa
+```
+
+### Como a categoria é definida?
+
+**Atualmente (25 Fev 2026):**
+- Categoria = nome da subpasta em `audiobooks/`
+- Lambda filtra documentos com `categoria == "Livros"` (genérico)
+- **Ambas as categorias (Inteligência + Geral) mostram TODOS os livros** (filtro é igual para ambas)
+
+**Futuro (quando implementar subcategorias reais):**
+```python
+LIVROS_CATEGORIAS = [
+    {"filtro": "Livros: Inteligencia Sensorial"},
+    {"filtro": "Livros: Geral"},
+]
+```
+
+E documentos teriam:
+```json
+{"categoria": "Livros: Inteligencia Sensorial"}
+```
+
+### Interface GUI de upload (futuro)
+Se adicionar `enviar_livro_ui.py` (tipo `enviar_musica_ui.py`):
+1. Seleciona categoria
+2. Seleciona pasta com MP3s numerados
+3. Clica "Publicar" → Copia, atualiza indice.json, push, Alexa tem acesso
+
+**Por enquanto:** Adicionar manualmente é suficiente. Quando tiver +10 livros, implementar GUI.
+
+---
+
+**Fim do Relatório**
+*Atualizado em 25 de Fevereiro, 2026*
+*Situação: ✅ Skill funcionando | ✅ Navegação hierárquica | ✅ Sincronização Lambda↔Repo | ✅ Categorização documentada*
