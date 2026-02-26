@@ -33,6 +33,13 @@ PLAYLISTS_PADRAO = [
     "Playlists Personalizadas",
 ]
 
+# Nomes de pastas antigas/legadas que devem ser IGNORADOS na listagem
+# (evita que pastas residuais reapareçam no dialog)
+_PLAYLISTS_IGNORAR = {
+    "Capoeira",           # versão genérica antiga
+    "Músicas Caxinguelê", # nome antigo com acento circunflexo
+}
+
 C = {
     "bg":      "#0f1117",
     "painel":  "#1a1d27",
@@ -100,7 +107,9 @@ class EnviarMusicaDialog:
         self.var_playlist = tk.StringVar()
 
         # Playlists do disco que NÃO estão no padrão (playlists criadas pelo usuário)
-        playlists_existentes = [p["nome"] for p in listar_playlists()]
+        # Filtra nomes legados/antigos que não devem aparecer
+        playlists_existentes = [p["nome"] for p in listar_playlists()
+                                if p["nome"] not in _PLAYLISTS_IGNORAR]
         extras = [p for p in playlists_existentes if p not in PLAYLISTS_PADRAO]
         todas = PLAYLISTS_PADRAO + extras
 
