@@ -9,6 +9,9 @@ Novidades v2:
   - Icone visual por tipo detectado
 """
 
+import json
+import shutil
+import subprocess
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import threading
@@ -38,7 +41,6 @@ from labirinto_ui import abrir_labirinto
 from analytics_manager import abrir_analytics, registrar_envio
 from gmail_monitor import abrir_verificar_emails
 from enviar_musica_ui import abrir_enviar_musica
-from enviar_livro_ui import abrir_enviar_livro
 
 # ==================== CORES ====================
 
@@ -75,6 +77,20 @@ ETAPAS = [
 ]
 
 
+def _ler_categorias_livros():
+    """Lê categorias de livros do menus_config.json (menu 2, tipo filtro)."""
+    try:
+        menus_path = Path(__file__).parent / "menus_config.json"
+        with open(menus_path, encoding="utf-8") as f:
+            menus = json.load(f)
+        for menu in menus:
+            if menu.get("numero") == 2 and menu.get("tipo") == "filtro":
+                return [op["nome"] for op in menu.get("opcoes", [])]
+    except Exception:
+        pass
+    return ["Livros: Inteligência Sensorial", "Livros: Geral"]
+
+
 class AudiobookGUI:
 
     def __init__(self, root):
@@ -93,6 +109,8 @@ class AudiobookGUI:
         self.etapa_atual = -1
         self.total_caps = 0
         self.caps_feitos = 0
+        self.modo_livro = False    # True quando selecionada pasta com MP3s
+        self.pasta_livro = None    # Path da pasta quando modo_livro=True
 
         self._construir_interface()
         self._configurar_drag_drop()
@@ -199,8 +217,8 @@ class AudiobookGUI:
                   activeforeground=C["ok"]
                   ).pack(side="right", padx=(0, 6))
 
-        tk.Button(frame_btn_abrir, text="📚 Enviar Livro",
-                  command=self._abrir_enviar_livro,
+        tk.Button(frame_btn_abrir, text="📂 Pasta de MP3s",
+                  command=self._selecionar_pasta,
                   bg="#2a3a4a", fg=C["acento"],
                   font=("Segoe UI", 10, "bold"),
                   relief="flat", cursor="hand2",
@@ -220,6 +238,30 @@ class AudiobookGUI:
             relief="flat", bd=0
         )
         self.entry_nome.pack(fill="x", ipady=8, pady=(4, 0))
+
+        # -- CATEGORIA (só aparece quando pasta de MP3s é selecionada) --
+        # frame sempre existe no pack order, mas vazio = altura 0
+        self.frame_categoria = tk.Frame(col_esq, bg=C["bg"])
+        self.frame_categoria.pack(fill="x")
+
+        self._lbl_cat = tk.Label(
+            self.frame_categoria,
+            text="3   Categoria do Livro  (onde aparece na Alexa)",
+            font=("Segoe UI", 10, "bold"),
+            bg=C["bg"], fg=C["texto2"]
+        )
+        # (não empacotado ainda — aparece quando pasta selecionada)
+
+        categorias = _ler_categorias_livros()
+        self.var_categoria = tk.StringVar(value=categorias[0] if categorias else "")
+        self._combo_categoria = ttk.Combobox(
+            self.frame_categoria,
+            textvariable=self.var_categoria,
+            values=categorias,
+            state="readonly",
+            font=("Segoe UI", 10),
+        )
+        # (não empacotado ainda)
 
         # -- OPCOES (sempre ativas, sem jargao tecnico) --
         self.var_drive = tk.BooleanVar(value=True)
@@ -436,7 +478,10 @@ class AudiobookGUI:
         # Volta visual normal
         self.frame_drop.config(highlightbackground=C["borda"], highlightthickness=2)
 
-        if caminho.exists() and formato_suportado(caminho):
+        if caminho.is_dir():
+            # Pasta arrastada → tenta modo livro (MP3s)
+            self._definir_pasta(caminho)
+        elif caminho.exists() and formato_suportado(caminho):
             self._definir_arquivo(caminho)
         else:
             self.label_arquivo.config(
@@ -504,6 +549,11 @@ class AudiobookGUI:
 
     def _definir_arquivo(self, caminho: Path):
         """Define o arquivo selecionado e detecta tipo"""
+        # Reseta modo livro se estava ativo
+        self.modo_livro = False
+        self.pasta_livro = None
+        self._esconder_categoria()
+
         self.arquivo_selecionado = caminho
 
         # Atualiza visual da area de drop
@@ -543,6 +593,12 @@ class AudiobookGUI:
             messagebox.showwarning("Aviso", "Digite o nome do documento.")
             return
 
+        # Modo livro: pasta de MP3s → publicação direta (sem TTS)
+        if self.modo_livro:
+            self._iniciar_publicar_livro(nome)
+            return
+
+        # Modo normal: pipeline TTS completo
         self.processando = True
         self.inicio_conversao = time.time()
         self.total_caps = 0
@@ -687,6 +743,13 @@ class AudiobookGUI:
     def _finalizar(self, sucesso):
         self.processando = False
 
+        # Para barra (seja determinada ou indeterminada)
+        try:
+            self.barra.stop()
+        except Exception:
+            pass
+        self.barra.config(mode="determinate")
+
         if sucesso:
             self.barra_var.set(100)
             self.label_pct.config(text="100%")
@@ -704,17 +767,30 @@ class AudiobookGUI:
             segs = tempo % 60
             tempo_str = f"{mins} min {segs}s" if mins > 0 else f"{segs} segundos"
 
-            # Registra no analytics
-            cat = self.tipo_detectado.nome if self.tipo_detectado else "Documentos"
-            arq = str(self.arquivo_selecionado) if self.arquivo_selecionado else ""
-            registrar_envio(nome, cat, arq, tempo)
-
-            messagebox.showinfo("Publicado!",
-                f"Documento disponivel na Alexa!\n\n"
-                f"Diga: 'Alexa, abre meus audiobooks'\n"
-                f"Depois escolha pelo numero.\n\n"
-                f"Documento: {nome}\n"
-                f"Tempo total: {tempo_str}")
+            if self.modo_livro:
+                # Mensagem específica para livro com MP3s
+                cat = self.var_categoria.get() if hasattr(self, "var_categoria") else "Livros"
+                arq = str(self.pasta_livro) if self.pasta_livro else ""
+                registrar_envio(nome, cat, arq, tempo)
+                messagebox.showinfo("Livro Publicado! 📚",
+                    f"'{nome}' está disponível na Alexa!\n\n"
+                    f"Categoria: {cat}\n"
+                    f"Diga: 'Alexa, abre meus audiobooks'\n"
+                    f"Vá em Livros para encontrar.")
+                self.modo_livro = False
+                self.pasta_livro = None
+                self._esconder_categoria()
+            else:
+                # Mensagem padrão para documentos
+                cat = self.tipo_detectado.nome if self.tipo_detectado else "Documentos"
+                arq = str(self.arquivo_selecionado) if self.arquivo_selecionado else ""
+                registrar_envio(nome, cat, arq, tempo)
+                messagebox.showinfo("Publicado!",
+                    f"Documento disponivel na Alexa!\n\n"
+                    f"Diga: 'Alexa, abre meus audiobooks'\n"
+                    f"Depois escolha pelo numero.\n\n"
+                    f"Documento: {nome}\n"
+                    f"Tempo total: {tempo_str}")
         else:
             self._desenhar_etapas(-1)
             self.dot_status.config(text="Erro - verifique o log", fg=C["erro"])
@@ -730,13 +806,186 @@ class AudiobookGUI:
 
         abrir_verificar_emails(self.root, on_email_selecionado)
 
+    def _selecionar_pasta(self):
+        """Abre seletor de pasta para livros com MP3s."""
+        pasta = filedialog.askdirectory(
+            title="Selecionar Pasta com MP3s do Livro"
+        )
+        if pasta:
+            self._definir_pasta(Path(pasta))
+
+    def _definir_pasta(self, pasta: Path):
+        """Define uma pasta de MP3s como fonte (modo livro)."""
+        mp3s = sorted(pasta.glob("*.mp3"))
+        if not mp3s:
+            messagebox.showwarning("Aviso", f"Nenhum arquivo .mp3 encontrado em:\n{pasta.name}")
+            return
+
+        self.pasta_livro = pasta
+        self.arquivo_selecionado = pasta  # para validação em _iniciar_conversao
+        self.modo_livro = True
+
+        # Atualiza área de drop visual
+        self.label_drop_icone.config(text="📚")
+        self.label_arquivo.config(
+            text=f"  {pasta.name}  ({len(mp3s)} capítulos MP3)",
+            fg=C["texto"]
+        )
+        self.label_tipo.config(
+            text=f"Tipo: Livro — {len(mp3s)} capítulos prontos (sem conversão TTS)",
+            fg=C["acento"]
+        )
+
+        # Auto-preenche nome a partir do nome da pasta
+        nome = pasta.name.replace("_", " ").replace("-", " ")
+        self.entry_nome.delete(0, "end")
+        self.entry_nome.insert(0, nome)
+
+        # Mostra dropdown de categoria
+        self._mostrar_categoria()
+
+        self._escrever_log(
+            f"Pasta: {pasta.name}  |  {len(mp3s)} MP3s  |  Modo livro ativado",
+            "info"
+        )
+
+    def _mostrar_categoria(self):
+        """Mostra o dropdown de categoria dentro de frame_categoria."""
+        self._lbl_cat.pack(anchor="w", pady=(10, 0))
+        self._combo_categoria.pack(fill="x", ipady=4, pady=(4, 0))
+
+    def _esconder_categoria(self):
+        """Esconde o dropdown de categoria."""
+        self._lbl_cat.pack_forget()
+        self._combo_categoria.pack_forget()
+
+    def _iniciar_publicar_livro(self, nome: str):
+        """Inicia publicação de livro (pasta MP3) sem pipeline TTS."""
+        mp3s = sorted(self.pasta_livro.glob("*.mp3"))
+        if not mp3s:
+            messagebox.showwarning("Aviso", "Nenhum MP3 na pasta selecionada.")
+            return
+
+        categoria = self.var_categoria.get().strip()
+        if not categoria:
+            messagebox.showwarning("Aviso", "Selecione uma categoria para o livro.")
+            return
+
+        self.processando = True
+        self.inicio_conversao = time.time()
+        self.barra.config(mode="indeterminate")
+        self.barra.start(12)
+        self.barra_var.set(0)
+        self.label_pct.config(text="")
+        self.btn_converter.config(state="disabled", text="Publicando livro...")
+        self.dot_status.config(text="Publicando", fg=C["acento"])
+        self._desenhar_etapas(0)
+        self._escrever_log("-" * 55, "dim")
+        self._escrever_log(f"LIVRO: {nome}", "bold")
+        self._escrever_log(f"Pasta   : {self.pasta_livro.name}", "dim")
+        self._escrever_log(f"Categ.  : {categoria}", "dim")
+        self._escrever_log(f"Caps.   : {len(mp3s)} MP3s", "dim")
+
+        threading.Thread(
+            target=self._publicar_livro_thread,
+            args=(categoria, nome, mp3s),
+            daemon=True
+        ).start()
+
+    def _publicar_livro_thread(self, categoria: str, nome_livro: str, mp3s: list):
+        """Thread de publicação de livro (pasta MP3) — sem TTS."""
+        from config import BASE_DIR, GDRIVE_CONFIG
+        INDICE_JSON = BASE_DIR / "audiobooks" / "indice.json"
+
+        def log(msg, tag="log"):
+            self.fila.put((tag, msg))
+
+        try:
+            total = len(mp3s)
+
+            # Passo 1: Copiar MP3s para pasta local
+            log(f"[1/4] Copiando {total} MP3(s) para audiobooks/{nome_livro}/...")
+            pasta_dest = BASE_DIR / "audiobooks" / categoria / nome_livro
+            pasta_dest.mkdir(parents=True, exist_ok=True)
+            for mp3 in mp3s:
+                shutil.copy2(mp3, pasta_dest / mp3.name)
+
+            # Passo 2: Upload para Google Drive
+            log("[2/4] Conectando ao Google Drive...")
+            from cloud_uploader import obter_servico_drive, obter_ou_criar_pasta, upload_arquivo
+            service = obter_servico_drive()
+            pasta_raiz_id = GDRIVE_CONFIG.get("pasta_raiz_id") or None
+
+            pasta_livros_id = obter_ou_criar_pasta(service, "Audiobooks Caxinguele", pasta_raiz_id)
+            pasta_cat_id = obter_ou_criar_pasta(service, categoria, pasta_livros_id)
+            pasta_livro_id = obter_ou_criar_pasta(service, nome_livro, pasta_cat_id)
+
+            urls_capitulos = []
+            for i, mp3 in enumerate(mp3s, 1):
+                log(f"[2/4] Upload capítulo {i}/{total}: {mp3.name}...")
+                destino = pasta_dest / mp3.name
+                resultado = upload_arquivo(service, destino, pasta_livro_id)
+                if not resultado:
+                    raise RuntimeError(f"Upload falhou para: {mp3.name}")
+                urls_capitulos.append({"arquivo": mp3.name, "url": resultado["direct_url"]})
+
+            # Passo 3: Atualizar indice.json
+            log("[3/4] Atualizando indice.json...")
+            dados = {"documentos": [], "total": 0, "versao": "2.0"}
+            if INDICE_JSON.exists():
+                with open(INDICE_JSON, encoding="utf-8") as f:
+                    dados = json.load(f)
+
+            hoje = datetime.now().strftime("%Y-%m-%d")
+            # Remove entradas antigas do mesmo livro (evita duplicatas)
+            dados["documentos"] = [
+                d for d in dados.get("documentos", [])
+                if not (d.get("titulo", "").startswith(nome_livro) and d.get("categoria") == categoria)
+            ]
+            for cap in urls_capitulos:
+                dados["documentos"].append({
+                    "titulo": f"{nome_livro} - {cap['arquivo'].replace('.mp3', '')}",
+                    "url_audio": cap["url"],
+                    "categoria": categoria,
+                    "data": hoje,
+                })
+            dados["total"] = len(dados["documentos"])
+            dados["atualizado_em"] = datetime.now().isoformat()
+
+            INDICE_JSON.parent.mkdir(parents=True, exist_ok=True)
+            with open(INDICE_JSON, "w", encoding="utf-8") as f:
+                json.dump(dados, f, ensure_ascii=False, indent=2)
+
+            # Passo 4: Git push
+            log("[4/4] Publicando no GitHub Pages...")
+            cwd = str(BASE_DIR)
+            subprocess.run(["git", "add", "audiobooks/indice.json"], cwd=cwd, check=True, capture_output=True)
+            subprocess.run(
+                ["git", "commit", "-m", f"Livro: {nome_livro} — {hoje}"],
+                cwd=cwd, check=True, capture_output=True
+            )
+            subprocess.run(["git", "push"], cwd=cwd, check=True, capture_output=True)
+
+            log(f"✅ '{nome_livro}' ({total} caps) publicado na Alexa!", "log_ok")
+            self.fila.put(("concluido", True))
+
+        except subprocess.CalledProcessError as e:
+            stderr = e.stderr.decode("utf-8", errors="replace") if e.stderr else ""
+            if "nothing to commit" in stderr or "up to date" in stderr:
+                log(f"✅ '{nome_livro}' publicado! (sem mudanças no git)", "log_ok")
+                self.fila.put(("concluido", True))
+            else:
+                log(f"Erro no git push: {stderr}", "log_erro")
+                self.fila.put(("concluido", False))
+        except Exception as e:
+            import traceback
+            log(f"[ERRO] {e}", "log_erro")
+            log(traceback.format_exc(), "log_erro")
+            self.fila.put(("concluido", False))
+
     def _enviar_musica(self):
         """Abre o dialog para enviar uma música para a Alexa."""
         abrir_enviar_musica(self.root)
-
-    def _abrir_enviar_livro(self):
-        """Abre o dialog para enviar um livro (pasta com MP3s) para a Alexa."""
-        abrir_enviar_livro(self.root)
 
     def _abrir_labirinto(self):
         """Abre o Labirinto de Numeros da Alexa"""
