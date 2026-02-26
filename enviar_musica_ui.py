@@ -99,14 +99,10 @@ class EnviarMusicaDialog:
 
         self.var_playlist = tk.StringVar()
 
-        # Junta playlists padrão + playlists existentes (sem duplicar)
+        # Playlists do disco que NÃO estão no padrão (playlists criadas pelo usuário)
         playlists_existentes = [p["nome"] for p in listar_playlists()]
-
-        # Remove genéricas/redundantes (ex: "Capoeira" se tem "Capoeira Regional"/"Capoeira Angola")
-        playlists_existentes = [p for p in playlists_existentes
-                               if p not in PLAYLISTS_PADRAO]  # remove duplicatas com padrão
-
-        todas = PLAYLISTS_PADRAO + playlists_existentes
+        extras = [p for p in playlists_existentes if p not in PLAYLISTS_PADRAO]
+        todas = PLAYLISTS_PADRAO + extras
 
         for pl in todas:
             rb = tk.Radiobutton(
@@ -119,12 +115,11 @@ class EnviarMusicaDialog:
                 selectcolor=C["entrada"],
                 font=("Segoe UI", 10),
                 cursor="hand2",
-                command=self._toggle_nova_playlist,  # ← AGORA TODOS TÊM COMMAND
+                command=self._toggle_nova_playlist,
             )
             rb.pack(anchor="w", pady=2)
 
         # Opção: criar nova playlist
-        self.var_playlist_nova = tk.BooleanVar(value=False)
         rb_nova = tk.Radiobutton(
             frame_playlists,
             text="  ➕  Criar nova playlist...",
@@ -139,16 +134,12 @@ class EnviarMusicaDialog:
         )
         rb_nova.pack(anchor="w", pady=2)
 
-        # Seleciona primeira opção por padrão
-        if todas:
-            self.var_playlist.set(todas[0])
-
-        # Campo para nome da nova playlist (oculto inicialmente)
-        self.frame_nova = tk.Frame(corpo, bg=C["bg"])
-        self.frame_nova.pack(fill="x", pady=(4, 0))
+        # Campo para nome da nova playlist — fica DENTRO do frame_playlists
+        # assim aparece logo abaixo do radiobutton sem problemas de reordenação
+        self.frame_nova = tk.Frame(frame_playlists, bg=C["painel"])
         tk.Label(self.frame_nova, text="Nome da nova playlist:",
                  font=("Segoe UI", 9),
-                 bg=C["bg"], fg=C["texto2"]).pack(anchor="w")
+                 bg=C["painel"], fg=C["texto2"]).pack(anchor="w", pady=(6, 2))
         self.entry_nova = tk.Entry(
             self.frame_nova,
             font=("Segoe UI", 10),
@@ -156,8 +147,12 @@ class EnviarMusicaDialog:
             insertbackground=C["texto"],
             relief="flat", bd=0
         )
-        self.entry_nova.pack(fill="x", ipady=6, pady=(2, 0))
-        self.frame_nova.pack_forget()  # oculto por padrão
+        self.entry_nova.pack(fill="x", ipady=6)
+        # frame_nova começa oculto — NÃO chamamos pack() ainda
+
+        # Seleciona primeira opção por padrão
+        if todas:
+            self.var_playlist.set(todas[0])
 
         tk.Frame(corpo, bg=C["bg"], height=14).pack()
 
@@ -233,10 +228,12 @@ class EnviarMusicaDialog:
     def _toggle_nova_playlist(self):
         """Mostra/esconde o campo de nome da nova playlist."""
         if self.var_playlist.get() == "__nova__":
-            self.frame_nova.pack(fill="x", pady=(4, 0))
+            # Aparece logo abaixo do radiobutton "Criar nova", dentro do mesmo frame
+            self.frame_nova.pack(fill="x", padx=4, pady=(4, 6))
             self.entry_nova.focus_set()
         else:
             self.frame_nova.pack_forget()
+            self.entry_nova.delete(0, "end")  # limpa o campo ao desselecionar
 
     def _selecionar_arquivo(self):
         """Abre diálogo para selecionar arquivo de música no PC."""

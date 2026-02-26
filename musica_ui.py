@@ -68,7 +68,8 @@ def listar_playlists() -> list:
 def criar_pasta_musicas():
     """Cria estrutura de pastas padrão se não existir."""
     PASTA_MUSICAS.mkdir(exist_ok=True)
-    for nome in ["Músicas Caxinguelê", "Capoeira", "Playlists Personalizadas"]:
+    # Nomes devem bater EXATAMENTE com PLAYLISTS_PADRAO em enviar_musica_ui.py
+    for nome in ["Músicas Caxinguele", "Capoeira Regional", "Capoeira Angola", "Playlists Personalizadas"]:
         (PASTA_MUSICAS / nome).mkdir(exist_ok=True)
 
 
