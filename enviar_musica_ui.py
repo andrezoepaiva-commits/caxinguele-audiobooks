@@ -101,7 +101,12 @@ class EnviarMusicaDialog:
 
         # Junta playlists padrão + playlists existentes (sem duplicar)
         playlists_existentes = [p["nome"] for p in listar_playlists()]
-        todas = list(dict.fromkeys(PLAYLISTS_PADRAO + playlists_existentes))
+
+        # Remove genéricas/redundantes (ex: "Capoeira" se tem "Capoeira Regional"/"Capoeira Angola")
+        playlists_existentes = [p for p in playlists_existentes
+                               if p not in PLAYLISTS_PADRAO]  # remove duplicatas com padrão
+
+        todas = PLAYLISTS_PADRAO + playlists_existentes
 
         for pl in todas:
             rb = tk.Radiobutton(
@@ -114,6 +119,7 @@ class EnviarMusicaDialog:
                 selectcolor=C["entrada"],
                 font=("Segoe UI", 10),
                 cursor="hand2",
+                command=self._toggle_nova_playlist,  # ← AGORA TODOS TÊM COMMAND
             )
             rb.pack(anchor="w", pady=2)
 
