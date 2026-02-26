@@ -38,6 +38,7 @@ from labirinto_ui import abrir_labirinto
 from analytics_manager import abrir_analytics, registrar_envio
 from gmail_monitor import abrir_verificar_emails
 from enviar_musica_ui import abrir_enviar_musica
+from enviar_livro_ui import abrir_enviar_livro
 
 # ==================== CORES ====================
 
@@ -196,6 +197,16 @@ class AudiobookGUI:
                   padx=4, pady=5,
                   activebackground="#1e3a1e",
                   activeforeground=C["ok"]
+                  ).pack(side="right", padx=(0, 6))
+
+        tk.Button(frame_btn_abrir, text="📚 Enviar Livro",
+                  command=self._abrir_enviar_livro,
+                  bg="#2a3a4a", fg=C["acento"],
+                  font=("Segoe UI", 10, "bold"),
+                  relief="flat", cursor="hand2",
+                  padx=4, pady=5,
+                  activebackground="#1e2a3a",
+                  activeforeground=C["acento"]
                   ).pack(side="right", padx=(0, 6))
 
         # -- NOME --
@@ -722,6 +733,10 @@ class AudiobookGUI:
     def _enviar_musica(self):
         """Abre o dialog para enviar uma música para a Alexa."""
         abrir_enviar_musica(self.root)
+
+    def _abrir_enviar_livro(self):
+        """Abre o dialog para enviar um livro (pasta com MP3s) para a Alexa."""
+        abrir_enviar_livro(self.root)
 
     def _abrir_labirinto(self):
         """Abre o Labirinto de Numeros da Alexa"""
