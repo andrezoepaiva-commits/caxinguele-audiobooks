@@ -85,10 +85,10 @@ def _ler_todas_categorias():
     categorias_fixas = [
         "Livros: Inteligência Sensorial",
         "Livros: Geral",
-        "Salvos",
-        "Notícias",
-        "Emails",
-        "Docs",
+        "Salvos para Escutar Mais Tarde",
+        "Notícias e Artigos Favoritados",
+        "Emails Favoritados",
+        "Documentos Importantes",
         "Últimas Atualizações",
     ]
     try:
@@ -863,12 +863,12 @@ class AudiobookGUI:
         # Mapa: TipoDocumento → categoria na Alexa
         mapa = {
             "LIVRO":             "Livros: Geral",
-            "ARTIGO_CIENTIFICO": "Salvos",
-            "EMAIL":             "Emails",
-            "DOCUMENTO_LEGAL":   "Docs",
-            "MATERIA_JORNAL":    "Notícias",
-            "ARTIGO_NOTICIA":    "Notícias",
-            "RELATORIO":         "Docs",
+            "ARTIGO_CIENTIFICO": "Salvos para Escutar Mais Tarde",
+            "EMAIL":             "Emails Favoritados",
+            "DOCUMENTO_LEGAL":   "Documentos Importantes",
+            "MATERIA_JORNAL":    "Notícias e Artigos Favoritados",
+            "ARTIGO_NOTICIA":    "Notícias e Artigos Favoritados",
+            "RELATORIO":         "Documentos Importantes",
             "OUTRO":             "Últimas Atualizações",
         }
         sugestao = mapa.get(tipo_documento, "Últimas Atualizações")
