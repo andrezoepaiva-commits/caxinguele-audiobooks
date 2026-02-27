@@ -77,18 +77,35 @@ ETAPAS = [
 ]
 
 
-def _ler_categorias_livros():
-    """Lê categorias de livros do menus_config.json (menu 2, tipo filtro)."""
+def _ler_todas_categorias():
+    """Retorna as 7 categorias disponíveis na Alexa Skill.
+    Tenta ler subcategorias de Livros do menus_config.json;
+    as demais categorias são fixas (estrutura da skill)."""
+    # Categorias fixas (refletem a estrutura dos menus da Alexa)
+    categorias_fixas = [
+        "Livros: Inteligência Sensorial",
+        "Livros: Geral",
+        "Salvos",
+        "Notícias",
+        "Emails",
+        "Docs",
+        "Últimas Atualizações",
+    ]
     try:
         menus_path = Path(__file__).parent / "menus_config.json"
         with open(menus_path, encoding="utf-8") as f:
             menus = json.load(f)
+        # Tenta pegar subcategorias de Livros dinamicamente
         for menu in menus:
             if menu.get("numero") == 2 and menu.get("tipo") == "filtro":
-                return [op["nome"] for op in menu.get("opcoes", [])]
+                cats_livros = [op["nome"] for op in menu.get("opcoes", [])]
+                if cats_livros:
+                    # Reconstrói a lista: cats de Livros + demais fixas
+                    return cats_livros + [c for c in categorias_fixas
+                                         if not c.startswith("Livros:")]
     except Exception:
         pass
-    return ["Livros: Inteligência Sensorial", "Livros: Geral"]
+    return categorias_fixas
 
 
 class AudiobookGUI:
@@ -217,15 +234,6 @@ class AudiobookGUI:
                   activeforeground=C["ok"]
                   ).pack(side="right", padx=(0, 6))
 
-        tk.Button(frame_btn_abrir, text="📂 Pasta de MP3s",
-                  command=self._selecionar_pasta,
-                  bg="#2a3a4a", fg=C["acento"],
-                  font=("Segoe UI", 10, "bold"),
-                  relief="flat", cursor="hand2",
-                  padx=4, pady=5,
-                  activebackground="#1e2a3a",
-                  activeforeground=C["acento"]
-                  ).pack(side="right", padx=(0, 6))
 
         # -- NOME --
         self._secao(col_esq, "2   Nome  (aparece na Alexa)")
@@ -239,20 +247,19 @@ class AudiobookGUI:
         )
         self.entry_nome.pack(fill="x", ipady=8, pady=(4, 0))
 
-        # -- CATEGORIA (só aparece quando pasta de MP3s é selecionada) --
-        # frame sempre existe no pack order, mas vazio = altura 0
+        # -- CATEGORIA (sempre visível — sugestão automática pelo tipo detectado) --
         self.frame_categoria = tk.Frame(col_esq, bg=C["bg"])
         self.frame_categoria.pack(fill="x")
 
         self._lbl_cat = tk.Label(
             self.frame_categoria,
-            text="3   Categoria do Livro  (onde aparece na Alexa)",
+            text="3   Categoria  (onde aparece na Alexa)",
             font=("Segoe UI", 10, "bold"),
             bg=C["bg"], fg=C["texto2"]
         )
-        # (não empacotado ainda — aparece quando pasta selecionada)
+        self._lbl_cat.pack(anchor="w", pady=(10, 0))
 
-        categorias = _ler_categorias_livros()
+        categorias = _ler_todas_categorias()
         self.var_categoria = tk.StringVar(value=categorias[0] if categorias else "")
         self._combo_categoria = ttk.Combobox(
             self.frame_categoria,
@@ -261,7 +268,7 @@ class AudiobookGUI:
             state="readonly",
             font=("Segoe UI", 10),
         )
-        # (não empacotado ainda)
+        self._combo_categoria.pack(fill="x", ipady=4, pady=(4, 0))
 
         # -- OPCOES (sempre ativas, sem jargao tecnico) --
         self.var_drive = tk.BooleanVar(value=True)
@@ -552,7 +559,6 @@ class AudiobookGUI:
         # Reseta modo livro se estava ativo
         self.modo_livro = False
         self.pasta_livro = None
-        self._esconder_categoria()
 
         self.arquivo_selecionado = caminho
 
@@ -569,6 +575,9 @@ class AudiobookGUI:
             text=f"Tipo: {self.tipo_detectado.nome}  ({self.tipo_detectado.confianca:.0%} confianca)",
             fg=C["acento"]
         )
+
+        # Sugere categoria automaticamente com base no tipo detectado
+        self._sugerir_categoria(self.tipo_detectado.tipo)
 
         # Auto-preenche nome
         nome = caminho.stem.replace("_", " ").replace("-", " ")
@@ -779,7 +788,6 @@ class AudiobookGUI:
                     f"Vá em Livros para encontrar.")
                 self.modo_livro = False
                 self.pasta_livro = None
-                self._esconder_categoria()
             else:
                 # Mensagem padrão para documentos
                 cat = self.tipo_detectado.nome if self.tipo_detectado else "Documentos"
@@ -841,23 +849,36 @@ class AudiobookGUI:
         self.entry_nome.delete(0, "end")
         self.entry_nome.insert(0, nome)
 
-        # Mostra dropdown de categoria
-        self._mostrar_categoria()
+        # Sugere categoria Livros para pasta de MP3s
+        self._sugerir_categoria("LIVRO")
 
         self._escrever_log(
             f"Pasta: {pasta.name}  |  {len(mp3s)} MP3s  |  Modo livro ativado",
             "info"
         )
 
-    def _mostrar_categoria(self):
-        """Mostra o dropdown de categoria dentro de frame_categoria."""
-        self._lbl_cat.pack(anchor="w", pady=(10, 0))
-        self._combo_categoria.pack(fill="x", ipady=4, pady=(4, 0))
+    def _sugerir_categoria(self, tipo_documento: str):
+        """Sugere categoria no dropdown com base no tipo de documento detectado.
+        O usuário pode aceitar ou mudar manualmente."""
+        # Mapa: TipoDocumento → categoria na Alexa
+        mapa = {
+            "LIVRO":             "Livros: Geral",
+            "ARTIGO_CIENTIFICO": "Salvos",
+            "EMAIL":             "Emails",
+            "DOCUMENTO_LEGAL":   "Docs",
+            "MATERIA_JORNAL":    "Notícias",
+            "ARTIGO_NOTICIA":    "Notícias",
+            "RELATORIO":         "Docs",
+            "OUTRO":             "Últimas Atualizações",
+        }
+        sugestao = mapa.get(tipo_documento, "Últimas Atualizações")
 
-    def _esconder_categoria(self):
-        """Esconde o dropdown de categoria."""
-        self._lbl_cat.pack_forget()
-        self._combo_categoria.pack_forget()
+        # Só aplica se a categoria sugerida existir nas opções disponíveis
+        opcoes = list(self._combo_categoria["values"])
+        if sugestao in opcoes:
+            self.var_categoria.set(sugestao)
+        elif opcoes:
+            self.var_categoria.set(opcoes[0])  # fallback para primeira opção
 
     def _iniciar_publicar_livro(self, nome: str):
         """Inicia publicação de livro (pasta MP3) sem pipeline TTS."""
