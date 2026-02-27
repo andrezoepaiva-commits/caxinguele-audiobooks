@@ -113,10 +113,10 @@ class AudiobookGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Projeto Caxinguele v2  |  Audiobooks para Alexa")
-        self.root.geometry("820x780")
+        self.root.geometry("820x920")  # Aumentado para acomodar categoria + log visível
         self.root.configure(bg=C["bg"])
         self.root.resizable(True, True)
-        self.root.minsize(700, 650)
+        self.root.minsize(700, 700)
 
         self.fila = queue.Queue()
         self.processando = False
