@@ -951,9 +951,107 @@ Mantenha estes arquivos no Desktop para referência rápida:
 
 ---
 
+---
+
+## 🔴 CAUSA RAIZ #12: .gitignore Bloqueia Arquivo Necessário (27 Fev 2026)
+
+### Sintoma
+- Sistema copia MP3s, faz upload para Drive, atualiza `indice.json` local
+- Tenta fazer `git push`
+- **Erro:** `The following paths are ignored by one of your .gitignore files: audiobooks`
+- `audiobooks/indice.json` nunca é commitado → GitHub Pages fica desatualizado → Alexa vê dados antigos
+
+### Diagnóstico
+**O `.gitignore` tinha:**
+```
+audiobooks/
+```
+
+Isso ignora o **diretório inteiro**, não apenas MP3s. Git não permite exceções dentro de diretório ignorado.
+
+Comando `git add audiobooks/indice.json` falha silenciosamente (caminho ignorado).
+
+### Solução Aplicada
+**Mudou para:**
+```
+audiobooks/*
+!audiobooks/indice.json
+```
+
+`audiobooks/*` ignora os **conteúdos** (MP3s, pastas), mas `!audiobooks/indice.json` faz exceção.
+
+**Resultado:** `git add audiobooks/indice.json` agora funciona ✅. `audiobooks/indice.json` é tracked e versionado.
+
+### Como identificar no futuro
+- [ ] Erro: `paths are ignored by one of your .gitignore files`
+- [ ] Arquivo necessário está dentro de diretório ignorado
+- [ ] Solução: mudar `dir/` para `dir/*` + `!dir/arquivo_necessario`
+
+---
+
+## 🔴 CAUSA RAIZ #13: Dropdown UI ≠ Valor que Lambda Filtra (Causa Raiz #9 bis — 27 Fev 2026)
+
+### Sintoma (Depois de Feature "Dropdown Inteligente")
+- Usuário arrasta pasta de MP3s
+- Dropdown sugere: **"Livros: Geral"** ✅
+- Sistema faz upload, atualiza `indice.json` com `"categoria": "Livros: Geral"`
+- Usuário vai à Alexa, abre "Livros" → **Nenhum livro aparece** ❌
+- CloudWatch mostra: Lambda executa, nenhum erro, mas retorna 0 resultados
+
+### Diagnóstico
+**Mismatch de contrato de dados:**
+
+```
+GUI (audiobook_gui.py):
+  categoria = "Livros: Geral"  ← dropdown value
+  indice.json: {"categoria": "Livros: Geral"}
+
+Lambda (código.txt, linhas 1037, 1049):
+  LIVROS_CATEGORIAS = [
+    {"filtro": "Livros"},     ← Lambda filtra por isto
+    {"filtro": "Livros"},
+  ]
+  docs_livros = [d for d in todos_docs if d.get("categoria") == "Livros"]
+
+Comparação:
+  "Livros: Geral" != "Livros"  ← MISMATCH → 0 resultados
+```
+
+**Por quê?** O dropdown mostra nome descritivo ("Livros: Geral") para o usuário, mas Lambda espera valor base ("Livros") para filtrar.
+
+### Solução Aplicada
+**Em `_publicar_livro_thread()` (audiobook_gui.py, linha ~970):**
+
+```python
+categoria_base = categoria.split(":")[0].strip() if ":" in categoria else categoria
+# "Livros: Geral" → "Livros"
+
+indice.json: {
+    "categoria": categoria_base,     # "Livros" (Lambda filtra isto)
+    "subcategoria": categoria,       # "Livros: Geral" (metadata para futuro)
+}
+```
+
+**Resultado:** Lambda agora encontra os livros ✅. Campo `subcategoria` preserva informação para quando implementar subcategorias reais.
+
+### Como identificar no futuro
+- [ ] Dropdown mostra valor com ":" (ex: "Livros: Geral")
+- [ ] Lambda filtra por valor mais simples (ex: "Livros")
+- [ ] Checklist: **SEMPRE validar contrato entre GUI display → JSON storage → Lambda filter**
+
+**Regra de ouro:** Display name (UI) ≠ Filter key (backend). Sempre extrair.
+
+### Padrão recorrente
+Esta é a **Causa Raiz #9 repetindo-se**. A RELATORIO já tinha avisado (linha 872):
+> "Antes de definir um filtro, verificar quais valores exatos existem no `indice.json`"
+
+**Lição:** Quando adicionar novo feature (dropdown), validar a cadeia completa GUI → JSON → Lambda **antes** de commitar.
+
+---
+
 **Fim do Relatório**
-*Atualizado em 24 de Fevereiro, 2026*
-*Situação: ✅ Skill funcionando | ✅ Labirinto com categorias e 4 opções visíveis | ✅ Lambda filtra por categoria correta*
+*Atualizado em 27 de Fevereiro, 2026*
+*Situação: ✅ Skill funcionando | ✅ Dropdown inteligente | ✅ Git + indice.json versionado | ✅ Lambda filtra corretamente*
 
 ---
 
