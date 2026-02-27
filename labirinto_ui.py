@@ -136,13 +136,21 @@ MENU_PADRAO = [
          {"numero": 2, "nome": "Marcar Novo Compromisso"},
      ]},
 
-    # Menu 8 — Reuniões: lista numerada (recente→antiga) → escolhe → modo de escuta
-    {"numero": 8,  "nome": "Reuniões Caxinguelê",     "tipo": "reunioes",
+    # Menu 6 — Reuniões: lista numerada (recente→antiga) → escolhe → modo de escuta
+    {"numero": 6,  "nome": "Reuniões Caxinguelê",     "tipo": "reunioes",
      "nota": "Alexa lista reuniões numeradas. Amigo escolhe → ouve detalhes → escolhe modo",
      "opcoes_apos_selecao": [
          {"numero": 1, "nome": "Resumo em tópicos"},
          {"numero": 2, "nome": "Resumo pragmático"},
          {"numero": 3, "nome": "Áudio na íntegra"},
+     ]},
+
+    # Menu 7 — YouTube e Vídeos
+    {"numero": 7,  "nome": "YouTube e Vídeos",         "tipo": "youtube",
+     "opcoes": [
+         {"numero": 1, "nome": "Últimas Atualizações YT"},
+         {"numero": 2, "nome": "Pesquisar no YouTube"},
+         {"numero": 3, "nome": "Meus Canais"},
      ]},
 
     # Menu 9 — Configurações (Velocidade / Guia)

@@ -80,12 +80,52 @@
 - [x] `teste_multiformat.py` — Script de teste rapido (5 formatos)
 - [x] `CHECKPOINTS.md` — Este arquivo
 
-## Proximos Passos
-1. Testar GUI visualmente (CHECKLIST_TESTES_GUI.md)
-2. Deploy lambda_function.py atualizada no AWS Console
-3. Testar Lambda com Alexa real
-4. Renomear Skill → "Super Alexa"
-5. README.md para o amigo (manual de uso)
+### Fase 7: Refatoração Menu Livros + Menu YouTube — PRONTO PARA DEPLOY (27 FEV 2026)
+
+#### Parte 1 — Menu Livros
+- [x] `indice.json`: removidas 4 duplicatas (3 Livros: Geral sem subcategoria + 1 untitled). Total 14→10. Git push feito.
+- [x] `LIVROS_CATEGORIAS`: adicionados `nome_display` e `filtro_subcategoria`
+- [x] Filtro por subcategoria em 4 pontos: `_selecionar_submenu`, `_selecionar_acao_item`, `_reconstruir_menu`, `_repetir_opcoes`
+- [x] Texto falado: "1 para Livros: Inteligencia Sensorial. 2 para Livros: Geral."
+- [x] Sinopse automática: fala n. capítulos + data formatada (ex: "3 capítulos, adicionado em fevereiro de 2026.")
+- [x] `AMAZON.PauseIntent`: para o áudio + fala menu de opções (1 pular, 2 voltar, 3 velocidade, 98 repetir, 99 menu)
+- [x] Handler `playback_pausado` em `_selecionar_submenu`: reconstrói contexto do token para pular/voltar capítulo
+- [x] `_PARENT_MENU`: adicionado `playback_pausado`
+
+#### Parte 2 — Menu YouTube (novo Menu [9])
+- [x] `MENU_DEFAULT[9]`: "YouTube e Videos" (tipo "youtube")
+- [x] Constantes: `YOUTUBE_API_KEY`, `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_DEST` (env vars)
+- [x] `_menu_youtube()`, `_menu_youtube_canais()`
+- [x] `_buscar_videos_canal_rss()`: RSS feed gratuito por channel_id
+- [x] `_buscar_youtube_api()`: YouTube Data API v3 + filtro Shorts (< 2 min)
+- [x] `_resumir_video_youtube()`: verifica legendas (Claude API = futura integração)
+- [x] `_enviar_whatsapp()`: WhatsApp Cloud API
+- [x] `_get_canais_youtube()` / `_salvar_canais_youtube()`: DynamoDB (campo `canais_youtube`)
+- [x] `_buscar_canal_youtube_api()`: busca canal por nome
+- [x] Handlers: `youtube`, `youtube_canal`, `youtube_busca`, `youtube_busca_aguardando`, `youtube_video`, `youtube_canais`, `youtube_canais_remover`
+- [x] `YoutubeSearchIntent` no `interaction_model.json` (10 samples, slot AMAZON.SearchQuery)
+- [x] `_PARENT_MENU`: 8 novos tipos YouTube
+
+#### Bugs corrigidos na validação
+- [x] Bug: PauseIntent durante música (token "MUSICA|||0") exibia "MUSICA, capitulo 1" → adicionado guard `if not livro_base_token.startswith("MUSICA")`
+- [x] Bug: Sinopse automática duplicava o título → removido `{titulo}` do fallback
+- [x] Bug: `youtube_parent_tipo` não era salvo na sessão → corrigido ao criar `youtube_video`
+- [x] Bug: `youtube_busca_aguardando` sem handler → adicionado handler guia o usuário a falar o termo
+
+#### Arquivos modificados
+- `C:\Users\andre\Desktop\código.txt` — Lambda (pronto para copiar ao Console)
+- `C:\Users\andre\Desktop\interaction_model.json` — pronto para copiar ao Alexa Dev Console
+- `audiobooks/indice.json` — limpo, commit f15dbf4, pushed
+
+## Proximos Passos — DEPLOY
+1. **Copiar código.txt para Lambda Console** → Deploy
+2. **Copiar interaction_model.json** para Alexa Dev Console → Build
+3. **Configurar variáveis de ambiente no Lambda**:
+   - `YOUTUBE_API_KEY` (obter no Google Cloud Console)
+   - `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_DEST` (Meta Business)
+4. **Testar no Simulator**: fluxo Menu Livros → categoria → sinopse
+5. **Testar no dispositivo real**: dizer "pause" durante leitura → menu de pausa
+6. **Testar YouTube**: dizer "nove" → dizer "pesquisar [termo]"
 
 ## Dependencias Opcionais Faltantes
 - `mobi` — para ler arquivos .mobi (Kindle). Instalar: `pip install mobi`

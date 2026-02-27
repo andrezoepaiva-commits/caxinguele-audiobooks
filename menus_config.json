@@ -130,6 +130,25 @@
     ]
   },
   {
+    "numero": 7,
+    "nome": "YouTube e Vídeos",
+    "tipo": "youtube",
+    "opcoes": [
+      {
+        "numero": 1,
+        "nome": "Últimas Atualizações YT"
+      },
+      {
+        "numero": 2,
+        "nome": "Pesquisar no YouTube"
+      },
+      {
+        "numero": 3,
+        "nome": "Meus Canais"
+      }
+    ]
+  },
+  {
     "numero": 9,
     "nome": "Configurações",
     "tipo": "configuracoes",
