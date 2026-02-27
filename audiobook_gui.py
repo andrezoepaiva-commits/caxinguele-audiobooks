@@ -913,6 +913,12 @@ class AudiobookGUI:
             daemon=True
         ).start()
 
+    def _sanitizar_categoria(self, categoria: str) -> str:
+        """Remove caracteres inválidos de categoria para nomes de pasta.
+        Ex: 'Livros: Geral' → 'Livros-Geral'"""
+        # Windows não permite ':' em nomes de pasta
+        return categoria.replace(": ", "-").replace(":", "-")
+
     def _publicar_livro_thread(self, categoria: str, nome_livro: str, mp3s: list):
         """Thread de publicação de livro (pasta MP3) — sem TTS."""
         from config import BASE_DIR, GDRIVE_CONFIG
@@ -926,7 +932,8 @@ class AudiobookGUI:
 
             # Passo 1: Copiar MP3s para pasta local
             log(f"[1/4] Copiando {total} MP3(s) para audiobooks/{nome_livro}/...")
-            pasta_dest = BASE_DIR / "audiobooks" / categoria / nome_livro
+            categoria_pasta = self._sanitizar_categoria(categoria)
+            pasta_dest = BASE_DIR / "audiobooks" / categoria_pasta / nome_livro
             pasta_dest.mkdir(parents=True, exist_ok=True)
             for mp3 in mp3s:
                 shutil.copy2(mp3, pasta_dest / mp3.name)
@@ -938,7 +945,7 @@ class AudiobookGUI:
             pasta_raiz_id = GDRIVE_CONFIG.get("pasta_raiz_id") or None
 
             pasta_livros_id = obter_ou_criar_pasta(service, "Audiobooks Caxinguele", pasta_raiz_id)
-            pasta_cat_id = obter_ou_criar_pasta(service, categoria, pasta_livros_id)
+            pasta_cat_id = obter_ou_criar_pasta(service, categoria_pasta, pasta_livros_id)
             pasta_livro_id = obter_ou_criar_pasta(service, nome_livro, pasta_cat_id)
 
             urls_capitulos = []
