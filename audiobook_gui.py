@@ -965,16 +965,21 @@ class AudiobookGUI:
                     dados = json.load(f)
 
             hoje = datetime.now().strftime("%Y-%m-%d")
+            # Extrai categoria base para Lambda (ex: "Livros: Geral" → "Livros")
+            # Lambda LIVROS_CATEGORIAS filtra por "Livros", não por "Livros: Geral"
+            categoria_base = categoria.split(":")[0].strip() if ":" in categoria else categoria
+
             # Remove entradas antigas do mesmo livro (evita duplicatas)
             dados["documentos"] = [
                 d for d in dados.get("documentos", [])
-                if not (d.get("titulo", "").startswith(nome_livro) and d.get("categoria") == categoria)
+                if not (d.get("titulo", "").startswith(nome_livro) and d.get("categoria") == categoria_base)
             ]
             for cap in urls_capitulos:
                 dados["documentos"].append({
                     "titulo": f"{nome_livro} - {cap['arquivo'].replace('.mp3', '')}",
                     "url_audio": cap["url"],
-                    "categoria": categoria,
+                    "categoria": categoria_base,
+                    "subcategoria": categoria,
                     "data": hoje,
                 })
             dados["total"] = len(dados["documentos"])

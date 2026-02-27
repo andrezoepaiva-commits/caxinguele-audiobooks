@@ -1,0 +1,73 @@
+{
+  "documentos": [
+    {
+      "titulo": "requirements - Cap 01 - requirements.mp3",
+      "url_audio": "https://drive.google.com/uc?export=download&id=1mZiq0--NdAtmSd21R7OvI1VqKAxbzzjE",
+      "categoria": "Documentos",
+      "data": "2026-02-23"
+    },
+    {
+      "titulo": "(anonymous) - Cap 05 - CAPÍTULO 5 O Futuro dos Audiobooks.mp3",
+      "url_audio": "https://drive.google.com/uc?export=download&id=1eX_qJyspGLgcXV54hME_QDxURJe-4he5",
+      "categoria": "Documentos",
+      "data": "2026-02-23"
+    },
+    {
+      "titulo": "(anonymous) - Cap 04 - CAPÍTULO 4 Publicação e Distribuição.mp3",
+      "url_audio": "https://drive.google.com/uc?export=download&id=1bgPY0KonCL6MCt4HWFDcJvhRVRFZIVsK",
+      "categoria": "Documentos",
+      "data": "2026-02-23"
+    },
+    {
+      "titulo": "(anonymous) - Cap 03 - CAPÍTULO 3 Tecnologia por Trás do Áudio.mp3",
+      "url_audio": "https://drive.google.com/uc?export=download&id=11Smfeah-oxnnhOdesI7eC95csn5yMIzr",
+      "categoria": "Documentos",
+      "data": "2026-02-23"
+    },
+    {
+      "titulo": "(anonymous) - Cap 02 - CAPÍTULO 2 Benefícios e Aplicações Práticas.mp3",
+      "url_audio": "https://drive.google.com/uc?export=download&id=1GF5xd4N51ajBHA8XebzmWWc6qwQpjo8N",
+      "categoria": "Documentos",
+      "data": "2026-02-23"
+    },
+    {
+      "titulo": "(anonymous) - Cap 01 - CAPÍTULO 1 Introdução ao Mundo dos.mp3",
+      "url_audio": "https://drive.google.com/uc?export=download&id=1w3OUQNIIGIrVz1iRXLhQ0w9W8zfdJl8U",
+      "categoria": "Documentos",
+      "data": "2026-02-23"
+    },
+    {
+      "titulo": "untitled - Cap 01 - Parte 1.mp3",
+      "url_audio": "https://drive.google.com/uc?export=download&id=1pxrg48yGl1H-9O5THuRXUFhPf1fFw2S9",
+      "categoria": "Livros",
+      "data": "2026-02-20"
+    },
+    {
+      "titulo": "GUIA ALEXA ACESSIVEL - Cap 01 - GUIA ALEXA ACESSIVEL.mp3",
+      "url_audio": "https://drive.google.com/uc?export=download&id=1oQ2S3La9DR8S5O5oHqh6hUoAqlAp7UgV",
+      "categoria": "Artigos e Noticias",
+      "data": "2026-02-19"
+    },
+    {
+      "titulo": "TESTE LIVRO MP3 - 01-capitulo-um",
+      "url_audio": "https://drive.google.com/uc?export=download&id=1NpP1LMF7iVpQkX21m7nv2rXPcjm7PYFl",
+      "categoria": "Livros: Geral",
+      "data": "2026-02-27"
+    },
+    {
+      "titulo": "TESTE LIVRO MP3 - 02-capitulo-dois",
+      "url_audio": "https://drive.google.com/uc?export=download&id=1gZA1HjHctwAVGzLnMyokKIoaN0H2ndji",
+      "categoria": "Livros: Geral",
+      "data": "2026-02-27"
+    },
+    {
+      "titulo": "TESTE LIVRO MP3 - 03-capitulo-tres",
+      "url_audio": "https://drive.google.com/uc?export=download&id=13zoAXGKdboRqLQGnjDVxGPLIMtvMuSCp",
+      "categoria": "Livros: Geral",
+      "data": "2026-02-27"
+    }
+  ],
+  "total": 11,
+  "atualizado_em": "2026-02-27T10:12:57.126022",
+  "versao": "2.0"
+}

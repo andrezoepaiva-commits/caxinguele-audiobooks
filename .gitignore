@@ -5,8 +5,9 @@ client_secrets.json
 token.json
 token_gmail.json
 
-# Saída gerada
-audiobooks/
+# Saída gerada (MP3s ignorados, mas indice.json precisa ser versionado)
+audiobooks/*
+!audiobooks/indice.json
 temp/
 *.log
 
