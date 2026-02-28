@@ -15,9 +15,25 @@
       "arquivo": "C:\\Users\\andre\\Desktop\\Projetos\\pdf2audiobook\\requirements.txt",
       "tempo_conversao": 77,
       "data": "2026-02-23T10:17:07.276918"
+    },
+    {
+      "tipo": "envio",
+      "documento": "TESTE LIVRO MP3",
+      "categoria": "Livros: Geral",
+      "arquivo": "C:\\Users\\andre\\Desktop\\TESTE_LIVRO_MP3",
+      "tempo_conversao": 5,
+      "data": "2026-02-27T10:29:53.842904"
+    },
+    {
+      "tipo": "envio",
+      "documento": "TESTE LIVRO MP3",
+      "categoria": "Livros: Geral",
+      "arquivo": "C:\\Users\\andre\\Desktop\\TESTE_LIVRO_MP3",
+      "tempo_conversao": 8,
+      "data": "2026-02-27T10:31:10.133580"
     }
   ],
-  "total_envios": 2,
-  "ultimo_envio": "2026-02-23T10:17:07.276918",
+  "total_envios": 4,
+  "ultimo_envio": "2026-02-27T10:31:10.133580",
   "criado_em": "2026-02-23T10:10:33.591253"
 }

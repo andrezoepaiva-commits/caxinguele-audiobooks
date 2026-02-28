@@ -117,15 +117,26 @@
 - `C:\Users\andre\Desktop\interaction_model.json` — pronto para copiar ao Alexa Dev Console
 - `audiobooks/indice.json` — limpo, commit f15dbf4, pushed
 
+### Fase 8: Fix YouTube Summary — CONCLUÍDA (28 FEV 2026)
+- [x] `_resumir_video_youtube()` reescrita: placeholder → youtube-transcript-api v1.2.4
+- [x] Método correto: `YouTubeTranscriptApi().fetch(video_id, languages=['pt','pt-BR','en'])`
+- [x] Prioriza legendas em português, fallback para inglês
+- [x] Limita transcrição a 3000 chars (Alexa não trunca)
+- [x] Edge cases tratados: ID vazio, vídeo inexistente, legendas vazias
+- [x] Testado localmente: Rick Astley (dQw4w9WgXcQ) — transcrição em PT extraída OK
+- [x] `requirements.txt` atualizado: `youtube-transcript-api>=1.0.0`
+- [x] `lambda_function_atual.py` sincronizado com `código.txt`
+- [x] Lambda Layer zip criado: `youtube-transcript-layer.zip` (1.7MB, no Desktop)
+
 ## Proximos Passos — DEPLOY
-1. **Copiar código.txt para Lambda Console** → Deploy
-2. **Copiar interaction_model.json** para Alexa Dev Console → Build
-3. **Configurar variáveis de ambiente no Lambda**:
+1. **Upload Lambda Layer** `youtube-transcript-layer.zip` no Lambda Console
+2. **Copiar código.txt para Lambda Console** → Deploy
+3. **Copiar interaction_model.json** para Alexa Dev Console → Build (se não feito)
+4. **Configurar variáveis de ambiente no Lambda** (se não feito):
    - `YOUTUBE_API_KEY` (obter no Google Cloud Console)
    - `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_DEST` (Meta Business)
-4. **Testar no Simulator**: fluxo Menu Livros → categoria → sinopse
-5. **Testar no dispositivo real**: dizer "pause" durante leitura → menu de pausa
-6. **Testar YouTube**: dizer "nove" → dizer "pesquisar [termo]"
+5. **Testar no Simulator**: Menu YouTube → escolher vídeo → pedir resumo
+6. **Testar no dispositivo real**: dizer "sete" → YouTube → pesquisar → resumo
 
 ## Dependencias Opcionais Faltantes
 - `mobi` — para ler arquivos .mobi (Kindle). Instalar: `pip install mobi`

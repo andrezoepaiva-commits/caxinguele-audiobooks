@@ -18,6 +18,7 @@
 import json
 import logging
 import re
+import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
@@ -40,10 +41,10 @@ MENU_DEFAULT = [
       {"numero": 3, "nome": "Favoritos Importantes",           "tipo": "favoritos"},
       {"numero": 4, "nome": "Musica",                          "tipo": "musica"},
       {"numero": 5, "nome": "Calendario e Compromissos",       "tipo": "calendario"},
-      {"numero": 6, "nome": "Reunioes Caxinguele",             "tipo": "reunioes"},
-      {"numero": 7, "nome": "Organizacoes da Mente em Listas", "tipo": "listas_mentais"},
-      {"numero": 8, "nome": "Configuracoes",                   "tipo": "configuracoes"},
-      {"numero": 9, "nome": "Voltar ao Menu Principal",        "tipo": "voltar_menu"},
+      {"numero": 6,  "nome": "Reunioes Caxinguele",             "tipo": "reunioes"},
+      {"numero": 7,  "nome": "YouTube e Videos",                "tipo": "youtube"},
+      {"numero": 9,  "nome": "Configuracoes",                   "tipo": "configuracoes"},
+      {"numero": 10, "nome": "Organizacoes da Mente em Listas", "tipo": "listas_mentais"},
 ]
 
 # Numeros especiais reservados para navegacao
@@ -51,8 +52,16 @@ NUM_REPETIR = 98
 NUM_VOLTAR  = 99
 
 # DynamoDB para persistencia de capitulo entre sessoes
-DYNAMODB_TABLE  = "caxinguele_progresso"
+DYNAMODB_TABLE           = "caxinguele_progresso"
+DYNAMODB_LISTENING_TABLE = "caxinguele_listening_history"  # tempo de leitura por sessao
 TOKEN_SEPARADOR = "|||"  # usado no token do AudioPlayer: "livro_base|||capitulo_idx"
+
+# YouTube e WhatsApp (variaveis de ambiente configuradas no Lambda Console)
+import os
+YOUTUBE_API_KEY   = os.environ.get("YOUTUBE_API_KEY", "")
+WHATSAPP_TOKEN    = os.environ.get("WHATSAPP_TOKEN", "")
+WHATSAPP_PHONE_ID = os.environ.get("WHATSAPP_PHONE_ID", "")
+WHATSAPP_DEST     = os.environ.get("WHATSAPP_DEST", "")  # numero do usuario
 
 
 # ==================== PONTO DE ENTRADA ====================
@@ -75,8 +84,10 @@ def lambda_handler(event, context):
               return handle_playback_prev(event)
           elif request_type == "AudioPlayer.PlaybackStarted":
               return handle_playback_started(event)
+          elif request_type == "AudioPlayer.PlaybackStopped":
+              return handle_playback_stopped(event)
           elif request_type in ("AudioPlayer.PlaybackFinished", "AudioPlayer.PlaybackNearlyFinished",
-                                 "AudioPlayer.PlaybackFailed", "AudioPlayer.PlaybackStopped"):
+                                 "AudioPlayer.PlaybackFailed"):
               return {"version": "1.0", "response": {}}
           else:
               return _resp("Desculpe, nao entendi.")
@@ -120,10 +131,66 @@ def handle_intent(event):
       # Intents built-in
       if intent_name in ("AMAZON.StopIntent", "AMAZON.CancelIntent"):
           return _resp("Ate logo!", end=True)
+      if intent_name == "AMAZON.PauseIntent":
+          # Para o audio e mostra menu de opcoes
+          stop_directive = {"type": "AudioPlayer.Stop"}
+
+          # Recupera contexto do token do AudioPlayer
+          audio_ctx = event.get("context", {}).get("AudioPlayer", {})
+          token = audio_ctx.get("token", "")
+          livro_titulo = ""
+          cap_num = 1
+
+          if TOKEN_SEPARADOR in token:
+              partes_token = token.split(TOKEN_SEPARADOR)
+              livro_base_token = partes_token[0]
+              try:
+                  cap_idx = int(partes_token[1])
+                  cap_num = cap_idx + 1
+              except Exception:
+                  cap_idx = 0
+              # Ignora token de música (começa com "MUSICA") — só exibe título para livros
+              if not livro_base_token.startswith("MUSICA"):
+                  livro_titulo = livro_base_token
+
+          texto_livro = f"{livro_titulo}, capitulo {cap_num}. " if livro_titulo else ""
+          texto = (
+              f"Audio pausado. {texto_livro}"
+              "1 para pular para o proximo capitulo. "
+              "2 para voltar ao capitulo anterior. "
+              "3 para velocidade. "
+              f"{NUM_REPETIR} para repetir opcoes. {NUM_VOLTAR} para menu principal. "
+              "O que deseja fazer?"
+          )
+
+          new_session = {
+              **session,
+              "nivel": "submenu",
+              "menu_tipo": "playback_pausado",
+              "audio_token": token,
+              "livro_titulo_pausado": livro_titulo,
+              "capitulo_pausado": str(cap_num - 1),
+          }
+          return {
+              "version": "1.0",
+              "response": {
+                  "outputSpeech": {"type": "PlainText", "text": texto},
+                  "reprompt": {"outputSpeech": {"type": "PlainText", "text": "Diga uma opcao."}},
+                  "directives": [stop_directive],
+                  "shouldEndSession": False,
+              },
+              "sessionAttributes": new_session,
+          }
+      if intent_name == "AMAZON.ResumeIntent":
+          # Retoma — por ora, diz para reabrir a skill
+          return _resp(
+              "Para retomar, diga: Alexa, abre super alexa. "
+              "E depois escolha o menu que voce estava.",
+              end=True)
       if intent_name == "AMAZON.HelpIntent":
           return _handle_ajuda(session)
       if intent_name in ("ListarDocumentosIntent", "AMAZON.NavigateHomeIntent"):
-          return _voltar_menu_principal(session)
+          return _voltar_nivel_anterior(session)
 
       # Pular/voltar capitulo por voz durante leitura
       if intent_name == "AMAZON.NextIntent":
@@ -150,6 +217,57 @@ def handle_intent(event):
       if intent_name == "LerDocumentoIntent":
           return _handle_ler_documento(slots, session)
 
+      # YouTube: busca por voz (YoutubeSearchIntent serve para busca E adicionar canal)
+      if intent_name == "YoutubeSearchIntent":
+          query = (slots.get("query", {}).get("value", "") or "").strip()
+          if not query:
+              return _resp("Nao entendi. Tente novamente.", end=False, session=session)
+
+          # Se estamos no fluxo de adicionar canal, usa a query como nome do canal
+          if session.get("menu_tipo") == "youtube_canais_adicionar":
+              canal = _buscar_canal_youtube_api(query)
+              if not canal:
+                  return _resp(
+                      f"Canal {query} nao encontrado. Tente outro nome. "
+                      f"{NUM_VOLTAR} para voltar.",
+                      end=False, session=session)
+              user_id = session.get("user_id", "")
+              canais = _get_canais_youtube(user_id)
+              if any(c.get("channel_id") == canal["channel_id"] for c in canais):
+                  return _resp(
+                      f"Canal {canal['nome']} ja esta salvo. {NUM_VOLTAR} para voltar.",
+                      end=False, session={**session, "menu_tipo": "youtube_canais"})
+              canais.append(canal)
+              _salvar_canais_youtube(user_id, canais)
+              return _resp(
+                  f"Canal {canal['nome']} adicionado. "
+                  f"{NUM_VOLTAR} para voltar.",
+                  end=False, session={**session, "menu_tipo": "youtube_canais"})
+
+          # Busca normal no YouTube
+          videos = _buscar_youtube_api(query, max_results=5)
+          if not videos:
+              return _resp(
+                  f"Nenhum resultado para {query}. Tente outra busca. "
+                  f"{NUM_VOLTAR} para voltar.",
+                  end=False, session=session)
+          partes = []
+          for i, v in enumerate(videos, 1):
+              partes.append(f"{i}. {v['titulo']}, {v.get('duracao', '')}")
+          texto = (
+              f"Resultados para {query}. {len(videos)} videos. "
+              f"{'. '.join(partes)}. "
+              f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar. "
+              "Diga o numero do video."
+          )
+          new_session = {
+              **session,
+              "nivel": "submenu",
+              "menu_tipo": "youtube_busca",
+              "youtube_videos": json.dumps(videos),
+          }
+          return _resp(texto, end=False, reprompt="Diga o numero.", session=new_session)
+
       # Fallback: tenta extrair numero da fala bruta
       if intent_name == "AMAZON.FallbackIntent":
           fala_bruta = event.get("request", {}).get("intent", {}).get("slots", {})
@@ -160,6 +278,12 @@ def handle_intent(event):
           return _resp("Nao entendi. Tente dizer o numero, por exemplo: numero dois.",
                         end=False, session=session)
 
+      # Ultimo recurso: tenta extrair numero da fala bruta (inputTranscript)
+      numero = _extrair_numero_da_fala(event)
+      if numero is not None:
+          logger.info(f"Catch-all: extraiu {numero} de intent {intent_name}")
+          return _roteador_numero(numero, session)
+      logger.warning(f"Intent nao tratado: {intent_name} | slots: {slots}")
       return _resp("Nao entendi. Diga o numero ou diga voltar.",
                     end=False, session=session)
 
@@ -174,7 +298,7 @@ def _roteador_numero(numero, session):
       if numero == NUM_REPETIR:
           return _repetir_opcoes(session)
       if numero == NUM_VOLTAR:
-          return _voltar_menu_principal(session)
+          return _voltar_nivel_anterior(session)
 
       if nivel == "menu":
           return _selecionar_menu(numero, session)
@@ -219,14 +343,9 @@ def _selecionar_menu(numero, session):
                             end=False, session=session)
           return _listar_docs_como_submenu(docs, nome, session)
 
-      # ---------- Menu 2: Livros ----------
+      # ---------- Menu 2: Livros → submenu de categorias ----------
       if tipo == "filtro":
-          cat_filtro = cat.get("categoria", nome)
-          livros = [d for d in todos_docs if d.get("categoria", "") == cat_filtro]
-          if not livros:
-              return _resp(f"Nao ha livros catalogados no momento. Diga outro numero.",
-                            end=False, session=session)
-          return _menu_livros(livros, session)
+          return _menu_livros_categorias(session)
 
       # ---------- Menu 3: Favoritos ----------
       if tipo == "favoritos":
@@ -240,27 +359,28 @@ def _selecionar_menu(numero, session):
       if tipo == "calendario":
           return _menu_calendario(session)
 
-      # ---------- Menu 8: Reunioes Caxinguele ----------
+      # ---------- Menu 6: Reunioes Caxinguele ----------
       if tipo == "reunioes":
           return _menu_reunioes(session)
 
       # ---------- Menu 9: Configuracoes ----------
-      if tipo == "configuracoes":
+      if tipo == "configuracoes":  # numero 9
           return _resp(
-              f"{nome}. 1 para Escolher Voz. 2 para Velocidade da Fala. "
-              "3 para Guia do Usuario. "
+              f"{nome}. 1 para Velocidade da Fala. "
+              "2 para Guia do Usuario. "
               f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
               end=False,
               session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
 
-      # ---------- Menu 7: Listas Mentais ----------
+      # ---------- Menu 10: Listas Mentais ----------
       if tipo == "listas_mentais":
           return _menu_listas(session)
 
-      # ---------- Menu 8: Configuracoes ----------
-      # (handler ja existente, mantido abaixo)
+      # ---------- Menu 7: YouTube e Videos ----------
+      if tipo == "youtube":
+          return _menu_youtube(session)
 
-      # ---------- Menu 9: Voltar ao Menu Principal ----------
+      # ---------- Voltar ao Menu Principal (tipo legado) ----------
       if tipo == "voltar_menu":
           return _voltar_menu_principal(session)
 
@@ -315,6 +435,140 @@ def _salvar_progresso(user_id, livro_base, capitulo_idx):
           logger.warning(f"Erro ao salvar progresso: {e}")
 
 
+# ==================== DYNAMODB: TEMPO DE LEITURA ====================
+
+def _registrar_sessao_inicio(user_id, token, timestamp):
+      """Cria entrada de sessao de escuta com tempo_inicio (sem tempo_fim ainda)."""
+      try:
+          # Extrai nome do documento a partir do token (ex: "Livro_Base|||0")
+          partes = token.split(TOKEN_SEPARADOR) if TOKEN_SEPARADOR in token else [token, "0"]
+          documento = partes[0].replace("_", " ")
+
+          table = _get_dynamo().Table(DYNAMODB_LISTENING_TABLE)
+          table.put_item(Item={
+              "user_id":       user_id,
+              "data_sessao":   timestamp,  # Sort key = timestamp de inicio
+              "documento":     documento,
+              "token":         token,
+              "tempo_inicio":  timestamp,
+              "tempo_fim":     None,
+              "minutos_ouvidos": 0,
+              "status":        "em_andamento",
+          })
+          logger.info(f"Sessao inicio registrada: {documento} @ {timestamp}")
+      except Exception as e:
+          logger.warning(f"Erro ao registrar inicio de sessao: {e}")
+
+
+def _registrar_sessao_fim(user_id, token, timestamp_fim):
+      """Busca a sessao aberta e calcula minutos_ouvidos."""
+      try:
+          from boto3.dynamodb.conditions import Key as DynKey
+          table = _get_dynamo().Table(DYNAMODB_LISTENING_TABLE)
+
+          # Busca sessoes em andamento para este usuario com este token
+          resp = table.query(
+              KeyConditionExpression=DynKey("user_id").eq(user_id),
+              FilterExpression="token = :t AND #s = :s",
+              ExpressionAttributeNames={"#s": "status"},
+              ExpressionAttributeValues={":t": token, ":s": "em_andamento"},
+              ScanIndexForward=False,  # mais recente primeiro
+              Limit=1,
+          )
+          itens = resp.get("Items", [])
+          if not itens:
+              return  # Nao havia sessao aberta
+
+          sessao = itens[0]
+          data_sessao = sessao["data_sessao"]
+          tempo_inicio_str = sessao.get("tempo_inicio", data_sessao)
+
+          # Calcula minutos ouvidos
+          try:
+              t_inicio = datetime.fromisoformat(tempo_inicio_str.replace("Z", "+00:00"))
+              t_fim    = datetime.fromisoformat(timestamp_fim.replace("Z", "+00:00"))
+              minutos  = max(0, int((t_fim - t_inicio).total_seconds() / 60))
+          except Exception:
+              minutos = 0
+
+          # Atualiza entrada com tempo_fim e minutos
+          table.update_item(
+              Key={"user_id": user_id, "data_sessao": data_sessao},
+              UpdateExpression="SET tempo_fim = :tf, minutos_ouvidos = :m, #s = :s",
+              ExpressionAttributeNames={"#s": "status"},
+              ExpressionAttributeValues={
+                  ":tf": timestamp_fim,
+                  ":m":  minutos,
+                  ":s":  "concluida",
+              }
+          )
+          logger.info(f"Sessao fim: {sessao['documento']} — {minutos} min")
+      except Exception as e:
+          logger.warning(f"Erro ao registrar fim de sessao: {e}")
+
+
+def _calcular_tempo_leitura(user_id, periodo="mes"):
+      """
+      Retorna estatisticas de tempo de leitura para o periodo.
+      periodo: 'mes' | 'semana' | 'hoje'
+      Retorna dict: total_minutos, horas_minutos, media_por_dia, top_documentos
+      """
+      try:
+          from boto3.dynamodb.conditions import Key as DynKey
+          table = _get_dynamo().Table(DYNAMODB_LISTENING_TABLE)
+
+          # Define corte de data
+          agora = datetime.utcnow()
+          if periodo == "mes":
+              corte = agora.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+          elif periodo == "semana":
+              corte = agora - timedelta(days=agora.weekday())
+              corte = corte.replace(hour=0, minute=0, second=0, microsecond=0)
+          else:  # hoje
+              corte = agora.replace(hour=0, minute=0, second=0, microsecond=0)
+
+          corte_str = corte.isoformat() + "Z"
+
+          resp = table.query(
+              KeyConditionExpression=DynKey("user_id").eq(user_id) & DynKey("data_sessao").gte(corte_str),
+              FilterExpression="#s = :s",
+              ExpressionAttributeNames={"#s": "status"},
+              ExpressionAttributeValues={":s": "concluida"},
+          )
+          sessoes = resp.get("Items", [])
+
+          total = sum(int(s.get("minutos_ouvidos", 0)) for s in sessoes)
+          horas  = total // 60
+          minutos_rest = total % 60
+          horas_str = f"{horas}h {minutos_rest}min" if horas > 0 else f"{minutos_rest}min"
+
+          dias = max(1, (agora - corte).days + 1)
+          media = round(total / dias)
+
+          # Top documentos
+          contagem = {}
+          for s in sessoes:
+              doc = s.get("documento", "Desconhecido")
+              contagem[doc] = contagem.get(doc, 0) + int(s.get("minutos_ouvidos", 0))
+
+          total_para_pct = max(total, 1)
+          top = sorted(
+              [{"documento": d, "minutos": m, "percentual": int(m / total_para_pct * 100)}
+               for d, m in contagem.items()],
+              key=lambda x: -x["minutos"]
+          )[:5]
+
+          return {
+              "total_minutos":   total,
+              "horas_minutos":   horas_str,
+              "media_por_dia":   media,
+              "top_documentos":  top,
+          }
+      except Exception as e:
+          logger.warning(f"Erro ao calcular tempo de leitura: {e}")
+          return {"total_minutos": 0, "horas_minutos": "0min", "media_por_dia": 0, "top_documentos": []}
+
+
 # ==================== HELPERS DE CAPITULOS ====================
 
 def _extrair_livro_base(titulo):
@@ -367,7 +621,25 @@ def _agrupar_livros(docs):
 
 
 def _pular_capitulo_sessao(session, direcao):
-      """Pula para próximo/anterior capítulo com base na sessao ativa."""
+      """Pula para próximo/anterior capítulo ou música com base na sessao ativa."""
+      # Se estiver tocando musica, pula na playlist
+      musica_atual = session.get("musica_atual")
+      if musica_atual is not None:
+          musicas = _obter_json(session, "musicas") or _buscar_musicas_json()
+          musicas_com_url = [m for m in musicas if m.get("url")]
+          idx = int(musica_atual) + direcao
+          if idx < 0:
+              idx = len(musicas_com_url) - 1  # volta para ultima
+          if idx >= len(musicas_com_url):
+              idx = 0  # volta para primeira
+          if musicas_com_url:
+              m = musicas_com_url[idx]
+              titulo = m.get("titulo", f"Musica {idx + 1}")
+              token = f"MUSICA{TOKEN_SEPARADOR}{idx}"
+              new_session = {**session, "musica_atual": str(idx)}
+              return _build_audio(titulo, m["url"], token=token, session_extra=new_session)
+          return _resp("Nenhuma musica disponivel.", end=False, session=session)
+
       capitulos = _obter_json(session, "capitulos_livro") or []
       cap_atual = int(session.get("capitulo_atual", "0"))
       livro_base = session.get("livro_base", "")
@@ -406,17 +678,36 @@ def _pular_capitulo_sessao(session, direcao):
 
 
 def handle_playback_started(event):
-      """Quando AudioPlayer comeca a tocar, salva progresso no DynamoDB."""
+      """Quando AudioPlayer comeca a tocar, salva progresso e registra inicio de sessao."""
       try:
           token = event.get("request", {}).get("token", "")
           user_id = _get_user_id(event)
+          timestamp = event.get("request", {}).get("timestamp", datetime.utcnow().isoformat() + "Z")
           if TOKEN_SEPARADOR in token and user_id:
               partes = token.split(TOKEN_SEPARADOR)
-              livro_base = partes[0]
-              capitulo_idx = int(partes[1])
-              _salvar_progresso(user_id, livro_base, capitulo_idx)
+              # Nao salva progresso de musica, so de livros/artigos
+              if partes[0] != "MUSICA":
+                  livro_base = partes[0]
+                  capitulo_idx = int(partes[1])
+                  _salvar_progresso(user_id, livro_base, capitulo_idx)
+                  # Registra inicio da sessao de escuta para calcular tempo depois
+                  _registrar_sessao_inicio(user_id, token, timestamp)
       except Exception as e:
           logger.warning(f"Erro ao salvar progresso no playback: {e}")
+      return {"version": "1.0", "response": {}}
+
+
+def handle_playback_stopped(event):
+      """Quando usuario para o audio, calcula e salva minutos ouvidos no DynamoDB."""
+      try:
+          token = event.get("request", {}).get("token", "")
+          user_id = _get_user_id(event)
+          timestamp = event.get("request", {}).get("timestamp", datetime.utcnow().isoformat() + "Z")
+          # Nao rastreia paradas de musica
+          if TOKEN_SEPARADOR in token and token.split(TOKEN_SEPARADOR)[0] != "MUSICA":
+              _registrar_sessao_fim(user_id, token, timestamp)
+      except Exception as e:
+          logger.warning(f"Erro ao registrar parada de audio: {e}")
       return {"version": "1.0", "response": {}}
 
 
@@ -427,21 +718,42 @@ def handle_playback_next(event):
           user_id = _get_user_id(event)
           if TOKEN_SEPARADOR in token:
               partes = token.split(TOKEN_SEPARADOR)
-              livro_base = partes[0]
-              cap_atual = int(partes[1])
-              # Busca lista de capitulos do indice
-              documentos, _ = _buscar_dados_completos()
-              docs_livro = [d for d in documentos if _extrair_livro_base(d.get("titulo","")) == livro_base]
-              docs_livro.sort(key=lambda d: _extrair_num_capitulo(d.get("titulo","")))
-              novo_cap = cap_atual + 1
-              if novo_cap < len(docs_livro):
-                  cap = docs_livro[novo_cap]
-                  titulo = _titulo_curto(cap.get("titulo", f"Capitulo {novo_cap + 1}"))
-                  url = cap.get("url_audio", "")
-                  novo_token = f"{livro_base}{TOKEN_SEPARADOR}{novo_cap}"
-                  if url:
-                      _salvar_progresso(user_id, livro_base, novo_cap)
-                      return _build_audio(titulo, url, token=novo_token)
+              tipo_audio = partes[0]
+              idx_atual = int(partes[1])
+
+              # --- Musica: proxima da playlist ---
+              if tipo_audio == "MUSICA":
+                  musicas = _buscar_musicas_json()
+                  musicas_com_url = [m for m in musicas if m.get("url")]
+                  novo_idx = idx_atual + 1
+                  if novo_idx < len(musicas_com_url):
+                      m = musicas_com_url[novo_idx]
+                      titulo = m.get("titulo", f"Musica {novo_idx + 1}")
+                      novo_token = f"MUSICA{TOKEN_SEPARADOR}{novo_idx}"
+                      return _build_audio(titulo, m["url"], token=novo_token)
+                  # Fim da playlist: volta para a primeira
+                  if musicas_com_url:
+                      m = musicas_com_url[0]
+                      titulo = m.get("titulo", "Musica 1")
+                      novo_token = f"MUSICA{TOKEN_SEPARADOR}0"
+                      return _build_audio(titulo, m["url"], token=novo_token)
+
+              # --- Livros: proximo capitulo ---
+              else:
+                  livro_base = tipo_audio
+                  cap_atual = idx_atual
+                  documentos, _ = _buscar_dados_completos()
+                  docs_livro = [d for d in documentos if _extrair_livro_base(d.get("titulo","")) == livro_base]
+                  docs_livro.sort(key=lambda d: _extrair_num_capitulo(d.get("titulo","")))
+                  novo_cap = cap_atual + 1
+                  if novo_cap < len(docs_livro):
+                      cap = docs_livro[novo_cap]
+                      titulo = _titulo_curto(cap.get("titulo", f"Capitulo {novo_cap + 1}"))
+                      url = cap.get("url_audio", "")
+                      novo_token = f"{livro_base}{TOKEN_SEPARADOR}{novo_cap}"
+                      if url:
+                          _salvar_progresso(user_id, livro_base, novo_cap)
+                          return _build_audio(titulo, url, token=novo_token)
       except Exception as e:
           logger.warning(f"Erro handle_playback_next: {e}")
       return {"version": "1.0", "response": {}}
@@ -454,20 +766,43 @@ def handle_playback_prev(event):
           user_id = _get_user_id(event)
           if TOKEN_SEPARADOR in token:
               partes = token.split(TOKEN_SEPARADOR)
-              livro_base = partes[0]
-              cap_atual = int(partes[1])
-              documentos, _ = _buscar_dados_completos()
-              docs_livro = [d for d in documentos if _extrair_livro_base(d.get("titulo","")) == livro_base]
-              docs_livro.sort(key=lambda d: _extrair_num_capitulo(d.get("titulo","")))
-              novo_cap = cap_atual - 1
-              if novo_cap >= 0:
-                  cap = docs_livro[novo_cap]
-                  titulo = _titulo_curto(cap.get("titulo", f"Capitulo {novo_cap + 1}"))
-                  url = cap.get("url_audio", "")
-                  novo_token = f"{livro_base}{TOKEN_SEPARADOR}{novo_cap}"
-                  if url:
-                      _salvar_progresso(user_id, livro_base, novo_cap)
-                      return _build_audio(titulo, url, token=novo_token)
+              tipo_audio = partes[0]
+              idx_atual = int(partes[1])
+
+              # --- Musica: anterior da playlist ---
+              if tipo_audio == "MUSICA":
+                  musicas = _buscar_musicas_json()
+                  musicas_com_url = [m for m in musicas if m.get("url")]
+                  novo_idx = idx_atual - 1
+                  if novo_idx >= 0 and novo_idx < len(musicas_com_url):
+                      m = musicas_com_url[novo_idx]
+                      titulo = m.get("titulo", f"Musica {novo_idx + 1}")
+                      novo_token = f"MUSICA{TOKEN_SEPARADOR}{novo_idx}"
+                      return _build_audio(titulo, m["url"], token=novo_token)
+                  # Ja na primeira: vai para ultima
+                  if musicas_com_url:
+                      ultimo = len(musicas_com_url) - 1
+                      m = musicas_com_url[ultimo]
+                      titulo = m.get("titulo", f"Musica {ultimo + 1}")
+                      novo_token = f"MUSICA{TOKEN_SEPARADOR}{ultimo}"
+                      return _build_audio(titulo, m["url"], token=novo_token)
+
+              # --- Livros: capitulo anterior ---
+              else:
+                  livro_base = tipo_audio
+                  cap_atual = idx_atual
+                  documentos, _ = _buscar_dados_completos()
+                  docs_livro = [d for d in documentos if _extrair_livro_base(d.get("titulo","")) == livro_base]
+                  docs_livro.sort(key=lambda d: _extrair_num_capitulo(d.get("titulo","")))
+                  novo_cap = cap_atual - 1
+                  if novo_cap >= 0:
+                      cap = docs_livro[novo_cap]
+                      titulo = _titulo_curto(cap.get("titulo", f"Capitulo {novo_cap + 1}"))
+                      url = cap.get("url_audio", "")
+                      novo_token = f"{livro_base}{TOKEN_SEPARADOR}{novo_cap}"
+                      if url:
+                          _salvar_progresso(user_id, livro_base, novo_cap)
+                          return _build_audio(titulo, url, token=novo_token)
       except Exception as e:
           logger.warning(f"Erro handle_playback_prev: {e}")
       return {"version": "1.0", "response": {}}
@@ -527,36 +862,321 @@ def _menu_musicas(session):
 
 # ==================== MENU [2]: LIVROS ====================
 
-def _menu_livros(docs_brutos, session):
-      """Lista livros únicos (agrupados por titulo base). Amigo escolhe → capítulos."""
+# ==================== MENU [2]: LIVROS COM CATEGORIAS ====================
+
+# Categorias de livros — o "filtro" deve bater com o campo "categoria" dos documentos no indice.json
+# Por enquanto todos os livros têm categoria="Livros", então ambas as categorias filtram por "Livros"
+# Futuramente: criar subcategorias no pipeline de upload (ex: "Livros: Inteligencia Sensorial")
+LIVROS_CATEGORIAS = [
+      {
+          "numero": 1,
+          "nome": "Inteligencia Sensorial",
+          "nome_display": "Livros: Inteligencia Sensorial",
+          "filtro_subcategoria": "Livros: Inteligencia Sensorial",
+      },
+      {
+          "numero": 2,
+          "nome": "Geral",
+          "nome_display": "Livros: Geral",
+          "filtro_subcategoria": "Livros: Geral",
+      },
+]
+
+
+def _menu_livros_categorias(session):
+      """Submenu de categorias de livros. Amigo escolhe categoria → lista de livros."""
+      partes = [f"{cat['numero']} para {cat['nome_display']}" for cat in LIVROS_CATEGORIAS]
+      texto = (
+          "Livros. Escolha a categoria. "
+          f"{'. '.join(partes)}. "
+          f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar ao menu principal."
+      )
+      new_session = {
+          **session,
+          "nivel":     "submenu",
+          "menu_tipo": "livros_categorias",
+      }
+      return _resp(texto, end=False, reprompt="Diga o numero da categoria.", session=new_session)
+
+
+def _menu_livros(docs_brutos, session, categoria_nome=""):
+      """Lista livros únicos (agrupados por titulo base). Amigo escolhe → opcoes do livro."""
       livros = _agrupar_livros(docs_brutos)
       if not livros:
           return _resp(
-              "Nenhum livro catalogado no momento. Diga outro numero.",
-              end=False, session=session)
+              f"Nenhum livro catalogado em {categoria_nome}. "
+              f"{NUM_VOLTAR} para voltar.",
+              end=False, session={**session, "nivel": "submenu", "menu_tipo": "livros_categorias"})
 
       partes = []
       for i, livro in enumerate(livros, 1):
           n_caps = livro["total_capitulos"]
-          caps_txt = f"{n_caps} cap." if n_caps > 1 else "1 cap."
-          partes.append(f"{i}. {livro['titulo']} ({caps_txt})")
+          caps_txt = f"{n_caps} capitulos" if n_caps > 1 else "1 capitulo"
+          partes.append(f"{i}. {livro['titulo']}, {caps_txt}")
 
       texto = (
-          f"Livros. Voce tem {len(livros)} livro{'s' if len(livros) > 1 else ''} catalogado{'s' if len(livros) > 1 else ''}. "
+          f"Livros {categoria_nome}. "
+          f"Voce tem {len(livros)} livro{'s' if len(livros) > 1 else ''}. "
           f"{'. '.join(partes)}. "
           f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar. "
           "Qual livro quer ouvir?"
       )
       new_session = {
           **session,
-          "nivel":       "submenu",
-          "menu_tipo":   "livros",
-          "livros_dados": json.dumps(livros),
+          "nivel":             "submenu",
+          "menu_tipo":         "livros",
+          "livros_dados":      json.dumps(livros),
+          "livros_categoria":  categoria_nome,
       }
       return _resp(texto, end=False, reprompt="Diga o numero do livro.", session=new_session)
 
 
-# ==================== MENU [9]: CONFIGURACOES — VOZES E VELOCIDADES ====================
+# ==================== MENU [9]: YOUTUBE E VIDEOS ====================
+
+def _menu_youtube(session):
+      """Submenu principal do YouTube: ultimas atualizacoes, busca, gerenciar canais."""
+      texto = (
+          "YouTube e Videos. "
+          "1 para Ultimas Atualizacoes dos seus canais. "
+          "2 para Pesquisar no YouTube. "
+          "3 para Meus Canais. "
+          f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar ao menu principal."
+      )
+      new_session = {
+          **session,
+          "nivel":     "submenu",
+          "menu_tipo": "youtube",
+      }
+      return _resp(texto, end=False, reprompt="Diga o numero.", session=new_session)
+
+
+def _buscar_videos_canal_rss(channel_id, max_videos=5):
+      """Busca videos recentes de um canal via RSS (gratuito, sem API key)."""
+      url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
+      try:
+          with urllib.request.urlopen(url, timeout=10) as response:
+              xml_data = response.read().decode("utf-8")
+          root = ET.fromstring(xml_data)
+          ns = {"atom": "http://www.w3.org/2005/Atom", "yt": "http://www.youtube.com/xml/schemas/2015", "media": "http://search.yahoo.com/mrss/"}
+          entries = root.findall("atom:entry", ns)[:max_videos]
+          videos = []
+          for entry in entries:
+              titulo = entry.find("atom:title", ns)
+              video_id = entry.find("yt:videoId", ns)
+              published = entry.find("atom:published", ns)
+              autor = entry.find("atom:author/atom:name", ns)
+              if titulo is not None and video_id is not None:
+                  videos.append({
+                      "titulo": titulo.text,
+                      "video_id": video_id.text,
+                      "url": f"https://www.youtube.com/watch?v={video_id.text}",
+                      "canal": autor.text if autor is not None else "",
+                      "data": published.text[:10] if published is not None else "",
+                  })
+          return videos
+      except Exception as e:
+          logger.warning(f"Erro RSS YouTube canal {channel_id}: {e}")
+          return []
+
+
+def _buscar_youtube_api(query, max_results=5):
+      """Busca videos no YouTube via Data API v3. Filtra Shorts (< 2 min)."""
+      if not YOUTUBE_API_KEY:
+          return []
+      try:
+          # Busca
+          q_encoded = urllib.parse.quote(query)
+          search_url = (
+              f"https://www.googleapis.com/youtube/v3/search"
+              f"?part=snippet&type=video&q={q_encoded}"
+              f"&maxResults={max_results * 2}&key={YOUTUBE_API_KEY}"
+              f"&relevanceLanguage=pt&regionCode=BR"
+          )
+          with urllib.request.urlopen(search_url, timeout=10) as response:
+              data = json.loads(response.read().decode("utf-8"))
+          items = data.get("items", [])
+          if not items:
+              return []
+
+          # Busca duracoes para filtrar Shorts
+          video_ids = ",".join([item["id"]["videoId"] for item in items])
+          details_url = (
+              f"https://www.googleapis.com/youtube/v3/videos"
+              f"?part=contentDetails,snippet&id={video_ids}&key={YOUTUBE_API_KEY}"
+          )
+          with urllib.request.urlopen(details_url, timeout=10) as response:
+              details = json.loads(response.read().decode("utf-8"))
+
+          videos = []
+          for v in details.get("items", []):
+              duration = v.get("contentDetails", {}).get("duration", "PT0S")
+              # Filtra Shorts (< 2 min)
+              segundos = _parse_duration_iso(duration)
+              if segundos < 120:
+                  continue
+              snippet = v.get("snippet", {})
+              videos.append({
+                  "titulo": snippet.get("title", "Sem titulo"),
+                  "video_id": v["id"],
+                  "url": f"https://www.youtube.com/watch?v={v['id']}",
+                  "canal": snippet.get("channelTitle", ""),
+                  "duracao": _formatar_duracao(segundos),
+                  "duracao_seg": segundos,
+              })
+              if len(videos) >= max_results:
+                  break
+          return videos
+      except Exception as e:
+          logger.warning(f"Erro YouTube API: {e}")
+          return []
+
+
+def _parse_duration_iso(duration_str):
+      """Converte duracao ISO 8601 (PT1H2M30S) para segundos."""
+      import re as _re
+      match = _re.match(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", duration_str)
+      if not match:
+          return 0
+      h = int(match.group(1) or 0)
+      m = int(match.group(2) or 0)
+      s = int(match.group(3) or 0)
+      return h * 3600 + m * 60 + s
+
+
+def _formatar_duracao(segundos):
+      """Formata segundos para texto falado (ex: '1 hora e 23 minutos')."""
+      h = segundos // 3600
+      m = (segundos % 3600) // 60
+      partes = []
+      if h > 0:
+          partes.append(f"{h} hora{'s' if h > 1 else ''}")
+      if m > 0:
+          partes.append(f"{m} minuto{'s' if m > 1 else ''}")
+      return " e ".join(partes) if partes else "menos de 1 minuto"
+
+
+def _resumir_video_youtube(video_id):
+      """Busca transcricao do video via youtube-transcript-api.
+
+      Extrai legendas (automaticas ou manuais) do YouTube e retorna
+      a transcricao como texto para a Alexa ler em voz alta.
+      Prioriza portugues, depois ingles.
+      """
+      if not video_id:
+          return "Video invalido. Tente outro video."
+
+      try:
+          from youtube_transcript_api import YouTubeTranscriptApi
+          api = YouTubeTranscriptApi()
+          # Tenta buscar legendas em portugues primeiro, depois ingles
+          transcript = api.fetch(video_id, languages=['pt', 'pt-BR', 'en'])
+          # Junta todos os segmentos de legenda em um unico texto
+          texto_completo = " ".join([snippet.text for snippet in transcript])
+          if not texto_completo.strip():
+              return "Video possui legendas mas estao vazias. Tente outro video."
+          # Limita a 3000 caracteres para Alexa nao ficar muito longo
+          resumo = texto_completo[:3000]
+          if len(texto_completo) > 3000:
+              resumo += "... Transcricao resumida por ser muito longa."
+          return f"Transcricao do video. {resumo}"
+      except ImportError:
+          logger.warning("youtube-transcript-api nao instalada no Lambda")
+          return "Funcionalidade de resumo indisponivel no momento. Tente novamente mais tarde."
+      except Exception as e:
+          logger.info(f"Falha ao buscar legendas para {video_id}: {e}")
+          return ("Este video nao possui legendas disponiveis. "
+                  "Tente um video que tenha legendas ativadas no YouTube.")
+
+
+
+def _enviar_whatsapp(mensagem):
+      """Envia mensagem via WhatsApp Cloud API (Meta)."""
+      if not WHATSAPP_TOKEN or not WHATSAPP_PHONE_ID or not WHATSAPP_DEST:
+          return False
+      try:
+          url = f"https://graph.facebook.com/v18.0/{WHATSAPP_PHONE_ID}/messages"
+          payload = json.dumps({
+              "messaging_product": "whatsapp",
+              "to": WHATSAPP_DEST,
+              "type": "text",
+              "text": {"body": mensagem}
+          }).encode("utf-8")
+          req = urllib.request.Request(url, data=payload, method="POST", headers={
+              "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+              "Content-Type": "application/json",
+          })
+          with urllib.request.urlopen(req, timeout=10) as response:
+              return response.status == 200
+      except Exception as e:
+          logger.warning(f"Erro WhatsApp: {e}")
+          return False
+
+
+def _get_canais_youtube(user_id):
+      """Busca canais YouTube salvos do usuario no DynamoDB."""
+      try:
+          table = _get_dynamo().Table(DYNAMODB_TABLE)
+          resp = table.get_item(Key={"user_id": user_id})
+          item = resp.get("Item", {})
+          return json.loads(item.get("canais_youtube", "[]"))
+      except Exception:
+          return []
+
+
+def _salvar_canais_youtube(user_id, canais):
+      """Salva canais YouTube do usuario no DynamoDB."""
+      try:
+          table = _get_dynamo().Table(DYNAMODB_TABLE)
+          table.update_item(
+              Key={"user_id": user_id},
+              UpdateExpression="SET canais_youtube = :c",
+              ExpressionAttributeValues={":c": json.dumps(canais)},
+          )
+          return True
+      except Exception as e:
+          logger.warning(f"Erro salvando canais YouTube: {e}")
+          return False
+
+
+def _buscar_canal_youtube_api(nome_canal):
+      """Busca canal no YouTube por nome via API v3."""
+      if not YOUTUBE_API_KEY:
+          return None
+      try:
+          q_encoded = urllib.parse.quote(nome_canal)
+          url = (
+              f"https://www.googleapis.com/youtube/v3/search"
+              f"?part=snippet&type=channel&q={q_encoded}"
+              f"&maxResults=1&key={YOUTUBE_API_KEY}"
+          )
+          with urllib.request.urlopen(url, timeout=10) as response:
+              data = json.loads(response.read().decode("utf-8"))
+          items = data.get("items", [])
+          if items:
+              snippet = items[0].get("snippet", {})
+              return {
+                  "channel_id": items[0]["id"]["channelId"],
+                  "nome": snippet.get("channelTitle", nome_canal),
+              }
+      except Exception as e:
+          logger.warning(f"Erro buscando canal YouTube: {e}")
+      return None
+
+
+def _menu_youtube_canais(session):
+      """Submenu de gerenciamento de canais YouTube."""
+      texto = (
+          "Meus Canais. "
+          "1 para ver seus canais. "
+          "2 para adicionar canal. "
+          "3 para remover canal. "
+          f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar."
+      )
+      return _resp(texto, end=False, reprompt="Diga o numero.",
+                    session={**session, "nivel": "submenu", "menu_tipo": "youtube_canais"})
+
+
+# ==================== MENU [8]: CONFIGURACOES — VOZES E VELOCIDADES ====================
 
 def _menu_config_vozes(session):
       """Lista vozes disponiveis para o amigo escolher (vozes pt-BR de melhor qualidade)."""
@@ -735,6 +1355,7 @@ def _menu_listas(session):
 def _selecionar_submenu(numero, session):
       """Amigo escolheu uma opcao dentro de um menu."""
       menu_tipo = session.get("menu_tipo", "")
+      logger.info(f"_selecionar_submenu: numero={numero} | menu_tipo='{menu_tipo}' | nivel={session.get('nivel', '?')} | keys={list(session.keys())}")
 
       # ---------- Musicas: amigo escolheu musica ----------
       if menu_tipo == "musicas":
@@ -753,19 +1374,49 @@ def _selecionar_submenu(numero, session):
           titulo = musica.get("titulo", f"Musica {numero}")
           if url:
               _registrar_uso(titulo, "play_musica")
-              return _build_audio(titulo, url)
+              # Encontra o indice na lista de musicas com URL (playlist)
+              musicas_com_url = [m for m in musicas if m.get("url")]
+              idx = next((i for i, m in enumerate(musicas_com_url) if m.get("numero") == numero), 0)
+              token = f"MUSICA{TOKEN_SEPARADOR}{idx}"
+              new_session = {**session, "musica_atual": str(idx)}
+              return _build_audio(titulo, url, token=token, session_extra=new_session)
           return _resp(f"{titulo} ainda nao disponivel. Diga outro numero.", end=False, session=session)
+
+      # ---------- Livros categorias: amigo escolheu categoria → lista livros ----------
+      if menu_tipo == "livros_categorias":
+          if numero == NUM_REPETIR:
+              return _menu_livros_categorias(session)
+          if numero == NUM_VOLTAR:
+              return _voltar_menu_principal(session)
+          cat = next((c for c in LIVROS_CATEGORIAS if c["numero"] == numero), None)
+          if not cat:
+              return _resp(
+                  f"Numero invalido. Escolha entre 1 e {len(LIVROS_CATEGORIAS)}. "
+                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+                  end=False, session=session)
+          cat_nome = cat["nome"]
+          filtro_sub = cat.get("filtro_subcategoria", "")
+          todos_docs = _obter_json(session, "todos_docs") or []
+          docs_livros = [
+              d for d in todos_docs
+              if d.get("subcategoria", "") == filtro_sub
+              or d.get("categoria", "") == filtro_sub  # compatibilidade retroativa
+          ]
+          return _menu_livros(docs_livros, session, categoria_nome=cat_nome)
 
       # ---------- Livros: amigo escolheu qual livro → mostra opcoes ----------
       if menu_tipo == "livros":
           livros = _obter_json(session, "livros_dados") or []
           if numero == NUM_REPETIR:
               # Remonta lista de livros a partir dos docs originais
+              categoria_nome = session.get("livros_categoria", "")
               todos_docs = _obter_json(session, "todos_docs") or []
-              docs_livros = [d for d in todos_docs if d.get("categoria","") == "Livros"]
-              return _menu_livros(docs_livros, session)
+              cat_info = next((c for c in LIVROS_CATEGORIAS if c["nome"] == categoria_nome), None)
+              filtro_sub = cat_info["filtro_subcategoria"] if cat_info else "Livros: Geral"
+              docs_livros = [d for d in todos_docs if d.get("subcategoria","") == filtro_sub or d.get("categoria","") == filtro_sub]
+              return _menu_livros(docs_livros, session, categoria_nome=categoria_nome)
           if numero == NUM_VOLTAR:
-              return _voltar_menu_principal(session)
+              return _menu_livros_categorias(session)
           if not (1 <= numero <= len(livros)):
               return _resp(
                   f"Numero invalido. Ha {len(livros)} livros. Diga um numero entre 1 e {len(livros)}. "
@@ -1019,42 +1670,20 @@ def _selecionar_submenu(numero, session):
       if menu_tipo == "configuracoes":
           if numero == NUM_REPETIR:
               return _resp(
-                  "Configuracoes. 1 para Escolher Voz. 2 para Velocidade da Fala. 3 para Guia do Usuario. "
+                  "Configuracoes. 1 para Velocidade da Fala. 2 para Guia do Usuario. "
                   f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
                   end=False, session=session)
           if numero == NUM_VOLTAR:
-              return _voltar_menu_principal(session)
+              return _voltar_nivel_anterior(session)
           if numero == 1:
-              return _menu_config_vozes(session)
-          if numero == 2:
               return _menu_config_velocidades(session)
-          if numero == 3:
+          if numero == 2:
               return _resp(
                   "Guia do Usuario. Voce pode ouvir o menu de ajuda dizendo: Alexa, pede ajuda na super alexa. "
                   f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
                   end=False, session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
-          return _resp("Opcao invalida. 1 para Voz. 2 para Velocidade. 3 para Guia.",
+          return _resp("Opcao invalida. 1 para Velocidade. 2 para Guia.",
                         end=False, session=session)
-
-      # ---------- Configuracoes: escolher voz ----------
-      if menu_tipo == "config_vozes":
-          if numero == NUM_REPETIR:
-              return _menu_config_vozes(session)
-          if numero == NUM_VOLTAR:
-              return _resp(
-                  "Configuracoes. 1 para Escolher Voz. 2 para Velocidade da Fala. 3 para Guia do Usuario. "
-                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
-                  end=False, session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
-          nomes_vozes = ["Camila", "Vitoria", "Thiago", "Francisca", "Thalita", "Antonio"]
-          if not (1 <= numero <= len(nomes_vozes)):
-              return _resp(f"Opcao invalida. Escolha entre 1 e {len(nomes_vozes)}.",
-                            end=False, session=session)
-          voz_escolhida = nomes_vozes[numero - 1]
-          return _resp(
-              f"Voz {voz_escolhida} selecionada. "
-              "Para ativar, acesse Configuracoes da Alexa no aplicativo, va em Voz da Alexa e escolha {voz_escolhida}. "
-              f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
-              end=False, session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
 
       # ---------- Configuracoes: escolher velocidade ----------
       if menu_tipo == "config_velocidades":
@@ -1062,7 +1691,7 @@ def _selecionar_submenu(numero, session):
               return _menu_config_velocidades(session)
           if numero == NUM_VOLTAR:
               return _resp(
-                  "Configuracoes. 1 para Escolher Voz. 2 para Velocidade da Fala. 3 para Guia do Usuario. "
+                  "Configuracoes. 1 para Velocidade da Fala. 2 para Guia do Usuario. "
                   f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
                   end=False, session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
           velocidades_nomes  = ["Muito Devagar", "Devagar", "Normal", "Rapido", "Muito Rapido"]
@@ -1080,6 +1709,283 @@ def _selecionar_submenu(numero, session):
               "Para audiobooks gravados (MP3), a velocidade nao pode ser alterada em tempo real. "
               f"{NUM_VOLTAR} para voltar.",
               end=False, session=new_session)
+
+      # ---------- YouTube: submenu principal ----------
+      if menu_tipo == "youtube":
+          if numero == NUM_REPETIR:
+              return _menu_youtube(session)
+          if numero == NUM_VOLTAR:
+              return _voltar_menu_principal(session)
+          if numero == 1:
+              # Ultimas atualizacoes dos canais salvos
+              user_id = session.get("user_id", "")
+              canais = _get_canais_youtube(user_id)
+              if not canais:
+                  return _resp(
+                      "Voce ainda nao tem canais salvos. "
+                      "Diga 3 para gerenciar seus canais. "
+                      f"{NUM_VOLTAR} para voltar.",
+                      end=False, session=session)
+              todos_videos = []
+              for canal in canais:
+                  videos = _buscar_videos_canal_rss(canal.get("channel_id", ""), max_videos=3)
+                  todos_videos.extend(videos)
+              # Ordena por data (mais recente primeiro)
+              todos_videos.sort(key=lambda v: v.get("data", ""), reverse=True)
+              todos_videos = todos_videos[:10]
+              if not todos_videos:
+                  return _resp(
+                      "Nenhum video recente encontrado nos seus canais. "
+                      f"{NUM_VOLTAR} para voltar.",
+                      end=False, session=session)
+              partes = []
+              for i, v in enumerate(todos_videos, 1):
+                  partes.append(f"{i}. {v['titulo']}, do canal {v.get('canal', 'desconhecido')}")
+              texto = (
+                  f"Ultimas atualizacoes. {len(todos_videos)} videos. "
+                  f"{'. '.join(partes)}. "
+                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar. "
+                  "Diga o numero do video."
+              )
+              new_session = {
+                  **session,
+                  "nivel": "submenu",
+                  "menu_tipo": "youtube_canal",
+                  "youtube_videos": json.dumps(todos_videos),
+              }
+              return _resp(texto, end=False, reprompt="Diga o numero do video.", session=new_session)
+
+          if numero == 2:
+              # Pesquisar no YouTube — pedir o termo de busca
+              return _resp(
+                  "O que voce quer pesquisar no YouTube? "
+                  "Diga por exemplo: ver videos de meditacao, "
+                  "canal de culinaria, ou tutorial de violao.",
+                  end=False,
+                  reprompt="Diga o que quer pesquisar. Por exemplo: ver videos de meditacao.",
+                  session={**session, "nivel": "submenu", "menu_tipo": "youtube_busca_aguardando"})
+
+          if numero == 3:
+              # Gerenciar canais
+              return _menu_youtube_canais(session)
+
+          return _resp(
+              f"Opcao invalida. 1 atualizacoes, 2 pesquisar, 3 canais. "
+              f"{NUM_REPETIR} repetir. {NUM_VOLTAR} voltar.",
+              end=False, session=session)
+
+      # ---------- YouTube: aguardando termo de busca por voz ----------
+      if menu_tipo == "youtube_busca_aguardando":
+          if numero == NUM_VOLTAR:
+              return _menu_youtube(session)
+          # Usuário disse um número quando deveria dizer o termo de busca
+          return _resp(
+              "Nao entendi. Para pesquisar, diga por exemplo: "
+              "ver videos de meditacao, ou canal de culinaria, ou tutorial de violao. "
+              f"{NUM_VOLTAR} para voltar.",
+              end=False,
+              reprompt="Diga o que quer pesquisar. Por exemplo: ver videos de meditacao.",
+              session=session)
+
+      # ---------- YouTube: lista de videos (de canal ou busca) ----------
+      if menu_tipo in ("youtube_canal", "youtube_busca"):
+          if numero == NUM_REPETIR:
+              videos = _obter_json(session, "youtube_videos") or []
+              partes = []
+              for i, v in enumerate(videos, 1):
+                  partes.append(f"{i}. {v['titulo']}")
+              texto = (
+                  f"{len(videos)} videos. {'. '.join(partes)}. "
+                  f"{NUM_REPETIR} repetir. {NUM_VOLTAR} voltar."
+              )
+              return _resp(texto, end=False, reprompt="Diga o numero.", session=session)
+          if numero == NUM_VOLTAR:
+              return _menu_youtube(session)
+          videos = _obter_json(session, "youtube_videos") or []
+          if not (1 <= numero <= len(videos)):
+              return _resp(
+                  f"Numero invalido. Escolha entre 1 e {len(videos)}.",
+                  end=False, session=session)
+          video = videos[numero - 1]
+          titulo_v = video.get("titulo", "video")
+          canal_v = video.get("canal", "")
+          duracao_v = video.get("duracao", "")
+          dur_txt = f" Duracao: {duracao_v}." if duracao_v else ""
+          canal_txt = f" Canal: {canal_v}." if canal_v else ""
+          texto = (
+              f"{titulo_v}.{canal_txt}{dur_txt} "
+              "1 para ouvir resumo do video. "
+              "2 para enviar link no WhatsApp. "
+              f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar."
+          )
+          new_session = {
+              **session,
+              "nivel": "submenu",
+              "menu_tipo": "youtube_video",
+              "youtube_video_atual": json.dumps(video),
+              "youtube_parent_tipo": menu_tipo,  # salva de onde veio (canal ou busca)
+          }
+          return _resp(texto, end=False, reprompt="Diga uma opcao.", session=new_session)
+
+      # ---------- YouTube: opcoes de um video (resumo ou link) ----------
+      if menu_tipo == "youtube_video":
+          if numero == NUM_REPETIR:
+              video = _obter_json(session, "youtube_video_atual") or {}
+              return _resp(
+                  f"{video.get('titulo', 'video')}. 1 resumo. 2 enviar link. "
+                  f"{NUM_REPETIR} repetir. {NUM_VOLTAR} voltar.",
+                  end=False, session=session)
+          if numero == NUM_VOLTAR:
+              # Volta para lista de videos
+              parent = session.get("youtube_parent_tipo", "youtube_canal")
+              return _resp(
+                  "Voltando para a lista de videos. Diga o numero do video.",
+                  end=False,
+                  session={**session, "nivel": "submenu", "menu_tipo": parent})
+          video = _obter_json(session, "youtube_video_atual") or {}
+          if numero == 1:
+              # Resumo do video
+              video_id = video.get("video_id", "")
+              resumo = _resumir_video_youtube(video_id)
+              return _resp(
+                  f"Resumo de {video.get('titulo', 'video')}. {resumo} "
+                  f"{NUM_VOLTAR} para voltar.",
+                  end=False, session=session)
+          if numero == 2:
+              # Enviar link no WhatsApp
+              url_video = video.get("url", "")
+              titulo_v = video.get("titulo", "")
+              mensagem = f"Video do YouTube: {titulo_v}\n{url_video}"
+              sucesso = _enviar_whatsapp(mensagem)
+              if sucesso:
+                  return _resp(
+                      f"Link de {titulo_v} enviado no WhatsApp. "
+                      f"{NUM_VOLTAR} para voltar.",
+                      end=False, session=session)
+              else:
+                  return _resp(
+                      "Nao foi possivel enviar. Verifique as configuracoes do WhatsApp. "
+                      f"{NUM_VOLTAR} para voltar.",
+                      end=False, session=session)
+          return _resp("1 resumo. 2 enviar link.", end=False, session=session)
+
+      # ---------- YouTube: gerenciar canais ----------
+      if menu_tipo == "youtube_canais":
+          if numero == NUM_REPETIR:
+              return _menu_youtube_canais(session)
+          if numero == NUM_VOLTAR:
+              return _menu_youtube(session)
+          user_id = session.get("user_id", "")
+
+          if numero == 1:
+              # Ver meus canais
+              canais = _get_canais_youtube(user_id)
+              if not canais:
+                  return _resp(
+                      "Voce nao tem canais salvos. Diga 2 para adicionar um canal. "
+                      f"{NUM_VOLTAR} para voltar.",
+                      end=False, session=session)
+              partes = [f"{i}. {c.get('nome', 'canal')}" for i, c in enumerate(canais, 1)]
+              return _resp(
+                  f"Seus canais: {'. '.join(partes)}. "
+                  f"{NUM_VOLTAR} para voltar.",
+                  end=False, session=session)
+
+          if numero == 2:
+              # Adicionar canal — pedir nome
+              return _resp(
+                  "Diga o nome do canal que deseja adicionar.",
+                  end=False,
+                  session={**session, "nivel": "submenu", "menu_tipo": "youtube_canais_adicionar"})
+
+          if numero == 3:
+              # Remover canal — listar e pedir numero
+              canais = _get_canais_youtube(user_id)
+              if not canais:
+                  return _resp("Voce nao tem canais para remover.", end=False, session=session)
+              partes = [f"{i}. {c.get('nome', 'canal')}" for i, c in enumerate(canais, 1)]
+              return _resp(
+                  f"Qual canal remover? {'. '.join(partes)}. Diga o numero.",
+                  end=False,
+                  session={**session, "nivel": "submenu", "menu_tipo": "youtube_canais_remover",
+                           "youtube_canais_lista": json.dumps(canais)})
+
+          return _resp("1 ver canais. 2 adicionar. 3 remover.", end=False, session=session)
+
+      # ---------- YouTube: remover canal por numero ----------
+      if menu_tipo == "youtube_canais_remover":
+          if numero == NUM_VOLTAR:
+              return _menu_youtube_canais(session)
+          canais = _obter_json(session, "youtube_canais_lista") or []
+          user_id = session.get("user_id", "")
+          if not (1 <= numero <= len(canais)):
+              return _resp(f"Numero invalido. Escolha entre 1 e {len(canais)}.", end=False, session=session)
+          removido = canais.pop(numero - 1)
+          _salvar_canais_youtube(user_id, canais)
+          return _resp(
+              f"Canal {removido.get('nome', '')} removido. "
+              f"{NUM_VOLTAR} para voltar.",
+              end=False, session={**session, "menu_tipo": "youtube_canais"})
+
+      # ---------- Playback pausado: menu de opcoes apos dizer "pare" ----------
+      if menu_tipo == "playback_pausado":
+          if numero == NUM_REPETIR:
+              livro_titulo = session.get("livro_titulo_pausado", "")
+              cap_num = int(session.get("capitulo_pausado", "0")) + 1
+              texto_livro = f"{livro_titulo}, capitulo {cap_num}. " if livro_titulo else ""
+              texto = (
+                  f"{texto_livro}"
+                  "1 para pular capitulo. "
+                  "2 para voltar capitulo. "
+                  "3 para velocidade. "
+                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para menu principal."
+              )
+              return _resp(texto, end=False, reprompt="Diga uma opcao.", session=session)
+
+          if numero == NUM_VOLTAR:
+              return _voltar_menu_principal(session)
+
+          if numero == 3:  # Velocidade
+              return _menu_config_velocidades(session)
+
+          if numero in (1, 2):  # Pular ou voltar capitulo
+              token = session.get("audio_token", "")
+              if TOKEN_SEPARADOR in token:
+                  partes_token = token.split(TOKEN_SEPARADOR)
+                  livro_base_token = partes_token[0]
+                  try:
+                      cap_idx = int(partes_token[1])
+                  except Exception:
+                      cap_idx = 0
+                  # Busca dados completos do livro no GitHub Pages
+                  todos_docs = _obter_json(session, "todos_docs") or []
+                  if not todos_docs:
+                      docs_completos, _ = _buscar_dados_completos()
+                      todos_docs = docs_completos
+                      if todos_docs:
+                          session = {**session, "todos_docs": json.dumps(todos_docs)}
+                  caps = [d for d in todos_docs if _extrair_livro_base(d.get("titulo","")) == livro_base_token]
+                  caps.sort(key=lambda d: _extrair_num_capitulo(d.get("titulo","")))
+
+                  session_reconstituida = {
+                      **session,
+                      "livro_base": livro_base_token,
+                      "livro_titulo": livro_base_token,
+                      "capitulos_livro": json.dumps(caps),
+                      "capitulo_atual": str(cap_idx),
+                      "nivel": "item",
+                      "menu_tipo": "livros",
+                  }
+                  direcao = +1 if numero == 1 else -1
+                  return _pular_capitulo_sessao(session_reconstituida, direcao=direcao)
+              else:
+                  return _resp(
+                      "Nao foi possivel identificar o livro. Abra o menu principal e escolha o livro novamente.",
+                      end=False, session={**session, "nivel": "menu", "menu_tipo": "principal"})
+
+          return _resp(
+              f"Opcao invalida. 1 pular, 2 voltar, 3 velocidade, {NUM_REPETIR} repetir, {NUM_VOLTAR} menu principal.",
+              end=False, reprompt="Diga uma opcao.", session=session)
 
       # Fallback
       return _resp("Nao entendi. Diga o numero ou diga voltar.",
@@ -1110,9 +2016,13 @@ def _selecionar_acao_item(numero, session):
                   end=False, session=session)
 
           if numero == NUM_VOLTAR:
+              # Volta para lista de livros da mesma categoria
+              categoria_nome = session.get("livros_categoria", "")
               todos_docs = _obter_json(session, "todos_docs") or []
-              docs_livros = [d for d in todos_docs if d.get("categoria","") == "Livros"]
-              return _menu_livros(docs_livros, session)
+              cat_info = next((c for c in LIVROS_CATEGORIAS if c["nome"] == categoria_nome), None)
+              filtro_sub = cat_info["filtro_subcategoria"] if cat_info else "Livros: Geral"
+              docs_livros = [d for d in todos_docs if d.get("subcategoria","") == filtro_sub or d.get("categoria","") == filtro_sub]
+              return _menu_livros(docs_livros, session, categoria_nome=categoria_nome)
 
           if numero == 1:
               # Comecar do capitulo 1
@@ -1158,9 +2068,23 @@ def _selecionar_acao_item(numero, session):
                             session={**session, "nivel": "submenu", "menu_tipo": "livros_capitulos"})
 
           if numero == 4:
-              # Sinopse do livro (campo 'sinopse' ou mensagem padrao)
+              # Sinopse do livro (campo 'sinopse' ou sinopse automática)
+              n_caps = len(capitulos)
+              data_raw = capitulos[0].get("data", "") if capitulos else ""
+              data_txt = ""
+              if data_raw:
+                  try:
+                      dt = datetime.strptime(data_raw, "%Y-%m-%d")
+                      meses = ["janeiro","fevereiro","marco","abril","maio","junho",
+                               "julho","agosto","setembro","outubro","novembro","dezembro"]
+                      data_txt = f", adicionado em {meses[dt.month-1]} de {dt.year}"
+                  except Exception:
+                      data_txt = f", adicionado em {data_raw}"
               if capitulos:
-                  sinopse = capitulos[0].get("sinopse", "Sinopse nao disponivel para este livro.")
+                  sinopse = capitulos[0].get(
+                      "sinopse",
+                      f"{n_caps} capitulo{'s' if n_caps > 1 else ''}{data_txt}."
+                  )
               else:
                   sinopse = "Sinopse nao disponivel."
               return _resp(
@@ -1267,6 +2191,7 @@ def _selecionar_acao_item(numero, session):
                   end=False, session={**session, "nivel": "menu"})
           return _resp("1 para remover. 2 para editar.", end=False, session=session)
 
+      # Fallback
       return _resp("Nao entendi. Diga o numero.", end=False, session=session)
 
 
@@ -1303,6 +2228,8 @@ def _repetir_opcoes(session):
           return _voltar_menu_principal(session)
 
       # Re-executa o menu de origem
+      if menu_tipo == "livros_categorias":
+          return _menu_livros_categorias(session)
       if menu_tipo == "calendario":
           return _menu_calendario(session)
       if menu_tipo == "reunioes":
@@ -1311,6 +2238,10 @@ def _repetir_opcoes(session):
           return _menu_favoritos(session)
       if menu_tipo == "listas":
           return _menu_listas(session)
+      if menu_tipo == "youtube":
+          return _menu_youtube(session)
+      if menu_tipo == "youtube_canais":
+          return _menu_youtube_canais(session)
 
       return _voltar_menu_principal(session)
 
@@ -1324,8 +2255,105 @@ def _voltar_menu_principal(session):
           "nivel":     "menu",
           "todos_docs": session.get("todos_docs", json.dumps(todos_docs)),
           "menu":       session.get("menu", json.dumps(menu)),
+          "user_id":    session.get("user_id", ""),
+          "progresso":  session.get("progresso", "{}"),
       }
+      if session.get("velocidade"):
+          new_session["velocidade"] = session["velocidade"]
       return _resp(texto, end=False, reprompt="Diga o numero.", session=new_session)
+
+
+# Tabela de navegacao: cada menu_tipo aponta para sua funcao-pai
+# None = voltar ao menu principal
+_PARENT_MENU = {
+    "musicas":             None,
+    "livros_categorias":   None,
+    "livros":              "livros_categorias",
+    "livros_capitulos":    "livros",
+    "configuracoes":       None,
+    "config_vozes":        "configuracoes",
+    "config_velocidades":  "configuracoes",
+    "favoritos":           None,
+    "favoritos_itens":     "favoritos",
+    "favoritos_item":      "favoritos_itens",
+    "calendario":          None,
+    "reunioes":            None,
+    "listas":              None,
+    "listas_itens":        "listas",
+    "listas_item":         "listas_itens",
+    "documentos":          None,
+    "playback_pausado":    None,
+    "youtube":             None,
+    "youtube_canal":       "youtube",
+    "youtube_busca":       "youtube",
+    "youtube_busca_aguardando": "youtube",
+    "youtube_video":       "youtube_canal",
+    "youtube_canais":      "youtube",
+    "youtube_canais_adicionar": "youtube_canais",
+    "youtube_canais_remover":   "youtube_canais",
+}
+
+# Funcoes que reconstroem cada menu (usadas pelo voltar hierarquico)
+def _reconstruir_menu(menu_tipo, session):
+      """Reconstroi o menu do tipo especificado para voltar um nivel."""
+      if menu_tipo == "livros_categorias":
+          return _menu_livros_categorias(session)
+      if menu_tipo == "livros":
+          categoria_nome = session.get("livros_categoria", "")
+          todos_docs = _obter_json(session, "todos_docs") or []
+          cat_info = next((c for c in LIVROS_CATEGORIAS if c["nome"] == categoria_nome), None)
+          filtro_sub = cat_info["filtro_subcategoria"] if cat_info else "Livros: Geral"
+          docs_livros = [d for d in todos_docs if d.get("subcategoria","") == filtro_sub or d.get("categoria","") == filtro_sub]
+          return _menu_livros(docs_livros, session, categoria_nome=categoria_nome)
+      if menu_tipo == "musicas":
+          return _menu_musicas(session)
+      if menu_tipo == "configuracoes":
+          return _resp(
+              "Configuracoes. 1 para Velocidade da Fala. 2 para Guia do Usuario. "
+              f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+              end=False,
+              session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
+      if menu_tipo == "config_velocidades":
+          return _menu_config_velocidades(session)
+      if menu_tipo == "favoritos":
+          return _menu_favoritos(session)
+      if menu_tipo == "favoritos_itens":
+          sublistas = _obter_json(session, "sublistas") or []
+          return _menu_favoritos(session)
+      if menu_tipo == "calendario":
+          return _menu_calendario(session)
+      if menu_tipo == "reunioes":
+          return _menu_reunioes(session)
+      if menu_tipo == "listas":
+          return _menu_listas(session)
+      if menu_tipo == "listas_itens":
+          return _menu_listas(session)
+      if menu_tipo == "youtube":
+          return _menu_youtube(session)
+      if menu_tipo == "youtube_canais":
+          return _menu_youtube_canais(session)
+      # Fallback
+      return _voltar_menu_principal(session)
+
+
+def _voltar_nivel_anterior(session):
+      """Volta UM nivel na hierarquia de menus (nao direto ao menu principal)."""
+      menu_tipo = session.get("menu_tipo", "")
+      nivel = session.get("nivel", "menu")
+
+      # Se ja esta no menu principal, nao tem para onde voltar
+      if nivel == "menu" or not menu_tipo:
+          return _voltar_menu_principal(session)
+
+      # Busca o pai na tabela
+      pai = _PARENT_MENU.get(menu_tipo)
+
+      if pai is None:
+          # Pai eh o menu principal
+          return _voltar_menu_principal(session)
+      else:
+          # Reconstroi o menu pai
+          return _reconstruir_menu(pai, session)
 
 
 # ==================== HELPERS: LISTAR DOCS ====================
@@ -1559,7 +2587,7 @@ def _enumerar_menu_principal(menu, documentos):
           tipo = cat.get("tipo", "filtro")
           # Menus permanentes (sempre aparecem)
           if tipo in ("recentes", "gravacao", "configuracoes", "favoritos",
-                       "musica", "calendario", "reunioes", "listas_mentais"):
+                       "musica", "calendario", "reunioes", "listas_mentais", "youtube"):
               partes.append(f"{num} para {nome}")
           else:
               # tipo filtro: so aparece se tiver documentos
@@ -1603,8 +2631,15 @@ def _extrair_numero(slots, nome):
           valor = slot_data.get("value", "")
           logger.info(f"DEBUG _extrair_numero: nome={nome} | slot_data={slot_data} | valor={valor} | tipo={type(valor)}")
           if valor:
-              return int(valor)
-      except (ValueError, TypeError) as e:
+              # Tenta converter direto (ex: "7" → 7)
+              try:
+                  return int(valor)
+              except ValueError:
+                  # AMAZON.NUMBER pode retornar texto em pt-BR (ex: "sete")
+                  num = _PALAVRAS_NUMEROS.get(valor.lower().strip())
+                  if num is not None:
+                      return num
+      except (TypeError) as e:
           logger.error(f"DEBUG _extrair_numero ERROR: {e}")
           pass
       return None
@@ -1627,16 +2662,19 @@ _PALAVRAS_NUMEROS = {
 def _extrair_numero_da_fala(event):
       """Tenta extrair um numero da fala bruta do usuario (fallback)."""
       try:
-          # Fonte 1: inputTranscript contem o texto bruto da fala do usuario
-          raw = event.get("request", {}).get("intent", {}).get("slots", {}).get("numero", {}).get("value", "") or ""
-          # Fonte 2: tenta slots genericos
+          # Fonte 1: inputTranscript — texto bruto da fala (campo real da Alexa)
+          raw = event.get("request", {}).get("inputTranscript", "") or ""
+          # Fonte 2: tenta slot value direto
+          if not raw:
+              raw = event.get("request", {}).get("intent", {}).get("slots", {}).get("numero", {}).get("value", "") or ""
+          # Fonte 3: tenta slots genericos
           if not raw:
               for slot_name, slot_data in event.get("request", {}).get("intent", {}).get("slots", {}).items():
                   if isinstance(slot_data, dict):
                       raw = slot_data.get("value", "") or ""
                       if raw:
                           break
-          logger.info(f"Fallback raw input: {raw}")
+          logger.info(f"Fallback raw input: '{raw}' | inputTranscript: '{event.get('request', {}).get('inputTranscript', 'N/A')}'")
 
           # Limpa o texto
           texto = raw.lower().strip()

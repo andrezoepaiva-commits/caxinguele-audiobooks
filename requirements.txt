@@ -51,6 +51,12 @@ google-auth-httplib2>=0.1.0
 # Google Drive API
 google-api-python-client>=2.0.0
 
+# ==================== YOUTUBE & VIDEO ====================
+
+# youtube-transcript-api - Extrai legendas e transcricoes de videos YouTube
+# Usada pela funcao _resumir_video_youtube() no Lambda
+youtube-transcript-api>=1.0.0
+
 # ==================== UTILITARIOS ====================
 
 # tqdm - Barras de progresso
