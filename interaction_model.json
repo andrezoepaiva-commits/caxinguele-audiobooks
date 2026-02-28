@@ -1,0 +1,254 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "super alexa",
+      "intents": [
+        {
+          "name": "AMAZON.CancelIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.HelpIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.StopIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.NavigateHomeIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.FallbackIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.NextIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.PreviousIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.PauseIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.ResumeIntent",
+          "samples": []
+        },
+        {
+          "name": "SelecionarNumeroIntent",
+          "slots": [
+            {
+              "name": "numero",
+              "type": "AMAZON.NUMBER"
+            }
+          ],
+          "samples": [
+            "{numero}",
+            "numero {numero}",
+            "número {numero}",
+            "opção {numero}",
+            "opcao {numero}",
+            "selecionar {numero}",
+            "selecionar o {numero}",
+            "escolher {numero}",
+            "escolher o {numero}",
+            "escolho {numero}",
+            "escolho o {numero}",
+            "escolho o número {numero}",
+            "quero o {numero}",
+            "quero {numero}",
+            "eu quero {numero}",
+            "eu quero o {numero}",
+            "eu escolho {numero}",
+            "eu escolho o {numero}",
+            "item {numero}",
+            "o {numero}",
+            "o número {numero}",
+            "o numero {numero}",
+            "o item {numero}",
+            "diga {numero}",
+            "diga o {numero}",
+            "vai {numero}",
+            "vai para {numero}",
+            "vai para o {numero}",
+            "vai pro {numero}",
+            "ir para {numero}",
+            "ir para o {numero}",
+            "ir pro {numero}",
+            "abre {numero}",
+            "abre o {numero}",
+            "abrir {numero}",
+            "abrir o {numero}",
+            "me dá o {numero}",
+            "me da o {numero}",
+            "me dá {numero}",
+            "me da {numero}",
+            "pode ser {numero}",
+            "pode ser o {numero}",
+            "é o {numero}",
+            "é {numero}",
+            "esse {numero}",
+            "essa {numero}",
+            "opção número {numero}",
+            "opcao numero {numero}",
+            "fala {numero}",
+            "fala o {numero}",
+            "manda o {numero}",
+            "manda {numero}",
+            "toca {numero}",
+            "toca o {numero}",
+            "coloca {numero}",
+            "coloca o {numero}",
+            "bota {numero}",
+            "bota o {numero}",
+            "quero o numero {numero}",
+            "quero o número {numero}",
+            "por favor {numero}",
+            "por favor o {numero}",
+            "número {numero} por favor",
+            "o de número {numero}",
+            "o de numero {numero}",
+            "menu {numero}",
+            "botão {numero}",
+            "botao {numero}",
+            "clica no {numero}",
+            "clica {numero}",
+            "aperta {numero}",
+            "aperta o {numero}",
+            "pressiona {numero}",
+            "seleciona {numero}",
+            "seleciona o {numero}",
+            "escolhe {numero}",
+            "escolhe o {numero}",
+            "marca {numero}",
+            "marca o {numero}",
+            "pega o {numero}",
+            "pega {numero}",
+            "vá para {numero}",
+            "va para {numero}",
+            "acessa {numero}",
+            "acessa o {numero}",
+            "acessar {numero}",
+            "acessar o {numero}"
+          ]
+        },
+        {
+          "name": "FiltrarPorTipoIntent",
+          "slots": [
+            {
+              "name": "tipo",
+              "type": "TIPO_DOCUMENTO"
+            }
+          ],
+          "samples": [
+            "mostrar {tipo}",
+            "ver {tipo}",
+            "listar {tipo}",
+            "quero {tipo}",
+            "abrir {tipo}",
+            "filtrar por {tipo}",
+            "categoria {tipo}",
+            "me mostra {tipo}",
+            "quero ver {tipo}",
+            "mostra os {tipo}",
+            "mostra as {tipo}"
+          ]
+        },
+        {
+          "name": "DocumentoNovosIntent",
+          "slots": [],
+          "samples": [
+            "novidades",
+            "o que tem de novo",
+            "últimas atualizações",
+            "ultimas atualizacoes",
+            "documentos novos",
+            "recentes",
+            "mais recentes",
+            "o que há de novo",
+            "tem novidade"
+          ]
+        },
+        {
+          "name": "LerDocumentoIntent",
+          "slots": [
+            {
+              "name": "titulo",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "ler {titulo}",
+            "ouvir {titulo}",
+            "reproduzir {titulo}",
+            "tocar {titulo}",
+            "escutar {titulo}",
+            "abrir {titulo}",
+            "buscar {titulo}",
+            "procurar {titulo}",
+            "coloca {titulo}",
+            "bota {titulo}"
+          ]
+        },
+        {
+          "name": "ListarDocumentosIntent",
+          "slots": [],
+          "samples": [
+            "listar documentos",
+            "listar tudo",
+            "mostrar tudo",
+            "ver tudo",
+            "menu principal",
+            "voltar",
+            "voltar ao início",
+            "inicio",
+            "começar de novo",
+            "volta",
+            "voltar ao menu",
+            "menu",
+            "recomeçar"
+          ]
+        },
+        {
+          "name": "YoutubeSearchIntent",
+          "slots": [
+            {
+              "name": "query",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "pesquisar {query}",
+            "buscar {query}",
+            "procurar {query} no youtube",
+            "quero ver {query}",
+            "busca {query}",
+            "pesquisa {query}",
+            "procura {query}",
+            "youtube {query}",
+            "buscar no youtube {query}",
+            "pesquisar no youtube {query}"
+          ]
+        }
+      ],
+      "types": [
+        {
+          "name": "TIPO_DOCUMENTO",
+          "values": [
+            { "name": { "value": "livros", "synonyms": ["livro", "ebook", "ebooks"] } },
+            { "name": { "value": "documentos", "synonyms": ["documento", "docs", "doc"] } },
+            { "name": { "value": "artigos", "synonyms": ["artigo", "notícias", "noticia", "noticias"] } },
+            { "name": { "value": "favoritos", "synonyms": ["favorito", "salvos", "marcados"] } },
+            { "name": { "value": "música", "synonyms": ["musica", "músicas", "musicas", "canções"] } },
+            { "name": { "value": "reuniões", "synonyms": ["reuniao", "reunioes", "meeting", "meetings"] } }
+          ]
+        }
+      ]
+    }
+  }
+}
