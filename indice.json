@@ -113,9 +113,14 @@
         "tipo": "calendario"
       },
       {
-        "numero": 8,
+        "numero": 6,
         "nome": "Reuniões Caxinguelê",
         "tipo": "reunioes"
+      },
+      {
+        "numero": 7,
+        "nome": "YouTube e Vídeos",
+        "tipo": "youtube"
       },
       {
         "numero": 9,
