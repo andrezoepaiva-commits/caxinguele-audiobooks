@@ -1,4 +1,14 @@
 {
+  "Ideias e Projetos": [
+    {
+      "conteudo": "Criar podcast mensal com as reuniões Caxinguelê",
+      "adicionado_em": "20/02/2026 17:57"
+    },
+    {
+      "conteudo": "Pesquisar aplicativo de audiodescrição",
+      "adicionado_em": "22/02/2026 14:57"
+    }
+  ],
   "Compras": [
     {
       "id": "3453ef7c",
@@ -25,6 +35,16 @@
       "adicionado_em": "22/02/2026 17:57"
     }
   ],
+  "Consultas Médicas": [
+    {
+      "id": "0a33f4fc",
+      "texto": "Marcar consulta com oftalmologista",
+      "categoria_sugerida": "Consultas Médicas",
+      "data": "22/02/2026 18:04",
+      "audio_original": null,
+      "confirmado": false
+    }
+  ],
   "Lembretes Médicos": [
     {
       "conteudo": "Tomar medicação às 8h",
@@ -39,16 +59,6 @@
       "adicionado_em": "22/02/2026 17:57"
     }
   ],
-  "Ideias e Projetos": [
-    {
-      "conteudo": "Criar podcast mensal com as reuniões Caxinguelê",
-      "adicionado_em": "20/02/2026 17:57"
-    },
-    {
-      "conteudo": "Pesquisar aplicativo de audiodescrição",
-      "adicionado_em": "22/02/2026 14:57"
-    }
-  ],
   "Tarefas da Semana": [
     {
       "id": "5d65ffef",
@@ -59,14 +69,5 @@
       "confirmado": false
     }
   ],
-  "Consultas Médicas": [
-    {
-      "id": "0a33f4fc",
-      "texto": "Marcar consulta com oftalmologista",
-      "categoria_sugerida": "Consultas Médicas",
-      "data": "22/02/2026 18:04",
-      "audio_original": null,
-      "confirmado": false
-    }
-  ]
+  "Insights Pessoais": []
 }
