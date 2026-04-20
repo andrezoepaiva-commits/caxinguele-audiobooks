@@ -66,7 +66,17 @@ App Alexa > Configuracoes > Amazon Household
 4. Clique "Adicionar"
 ```
 
-### 2d. Copiar o ARN da funcao
+### 2d. Adicionar permissao DynamoDB ao Lambda
+```
+1. Na pagina da funcao, va em "Configuration" > "Permissions"
+2. Clique no nome da "Execution role" (abre IAM em nova aba)
+3. Clique "Add permissions" > "Attach policies"
+4. Busque: AmazonDynamoDBFullAccess
+5. Selecione e clique "Add permissions"
+SEM ISSO: Lambda roda mas NAO salva progresso (amigo perde onde parou)
+```
+
+### 2e. Copiar o ARN da funcao
 ```
 Canto superior direito da pagina Lambda.
 Parece com: arn:aws:lambda:us-east-1:123456789:function:CaxingueleAudiobooks
@@ -100,7 +110,7 @@ Guarde esse valor — vai precisar no proximo passo.
 ```
 1. No menu esquerdo, clique em "Endpoint"
 2. Escolha "AWS Lambda ARN"
-3. Cole o ARN do passo 2d no campo "Default Region"
+3. Cole o ARN do passo 2e no campo "Default Region"
 4. Clique "Save Endpoints"
 ```
 
@@ -114,22 +124,43 @@ Guarde esse valor — vai precisar no proximo passo.
 
 ---
 
-## PASSO 4: Instalar na Alexa do seu amigo
+## PASSO 4: Compartilhar com amigo via Beta Testing
 
-Com Amazon Household configurado (Passo 1):
+IMPORTANTE: Skill em dev mode NAO aparece via Amazon Household.
+O caminho correto e Beta Testing (nao precisa publicar na store).
+
+### 4a. Preparar Distribution (pre-requisito do Beta)
 ```
-App Alexa (no seu celular)
-> Menu > Skills e Jogos
-> Buscar: Meus Audiobooks
-> "Habilitar para uso"
-> Na tela, selecione o dispositivo do seu amigo
-
-OU
-
-App Alexa > dispositivo do amigo
-> Configuracoes > Skills
-> Buscar e instalar "Meus Audiobooks"
+1. Na skill, va em "Distribution"
+2. Preencha campos obrigatorios:
+   - One Sentence Description: "Meus audiobooks por voz"
+   - Detailed Description: qualquer texto
+   - Example Phrases: "Alexa, abre meus audiobooks"
+   - Small/Large Icon: pode ser imagem placeholder (108x108 e 512x512)
+   - Category: Education & Reference
+   - Privacy Policy URL: pode deixar em branco se nao exigir
+3. Clique "Save"
 ```
+
+### 4b. Ativar Beta Test
+```
+1. Em "Distribution" > "Availability"
+2. Ative "Beta Test"
+3. Adicione o email da conta Amazon do seu amigo
+4. Clique "Send invite"
+```
+
+### 4c. Amigo aceita (guie por telefone, 2 minutos)
+```
+1. Ele recebe email "You've been invited to test [Meus Audiobooks]"
+2. Clica no link do email
+3. Faz login com conta Amazon dele
+4. Aceita o convite
+5. Skill aparece automaticamente nos dispositivos Echo dele
+```
+
+NOTA: Amazon Household ainda e util para gerenciar dispositivo remotamente,
+mas NAO e o mecanismo de compartilhamento da skill.
 
 ---
 

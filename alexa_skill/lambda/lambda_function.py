@@ -133,11 +133,35 @@ def handle_intent(event):
               }
           }
       if intent_name == "AMAZON.ResumeIntent":
-          # Retoma — por ora, diz para reabrir a skill
-          return _resp(
-              "Para retomar, diga: Alexa, abre super alexa. "
-              "E depois escolha o menu que voce estava.",
-              end=True)
+          # Retoma o ultimo livro/capitulo do DynamoDB
+          try:
+              user_id = _get_user_id(event)
+              progresso = _carregar_progresso(user_id)
+              if progresso:
+                  # Pega livro com capitulo mais avancado (sem timestamp, melhor heuristica disponivel)
+                  ultimo_livro = max(progresso, key=lambda k: progresso[k])
+                  cap_idx = int(progresso[ultimo_livro])
+                  documentos, _ = _buscar_dados_completos()
+                  livros = _agrupar_livros(documentos)
+                  livro = next((l for l in livros if l["livro_base"] == ultimo_livro), None)
+                  if livro and livro.get("capitulos"):
+                      caps = livro["capitulos"]
+                      if cap_idx < len(caps):
+                          cap = caps[cap_idx]
+                          url = cap.get("url_audio", "")
+                          if url:
+                              token = f"{ultimo_livro}{TOKEN_SEPARADOR}{cap_idx}"
+                              cap_titulo = _titulo_curto(cap.get("titulo", f"Capitulo {cap_idx + 1}"))
+                              return _build_audio(f"Continuando: {cap_titulo}", url, token=token)
+              return _resp(
+                  "Nenhum livro em andamento. Diga: Alexa, abre meus audiobooks. "
+                  "Para escolher um livro.",
+                  end=True)
+          except Exception as e:
+              logger.warning(f"ResumeIntent erro: {e}")
+              return _resp(
+                  "Nao consegui retomar. Diga: Alexa, abre meus audiobooks.",
+                  end=True)
       if intent_name == "AMAZON.HelpIntent":
           return _handle_ajuda(session)
       if intent_name in ("ListarDocumentosIntent", "AMAZON.NavigateHomeIntent"):
@@ -253,9 +277,19 @@ def _selecionar_menu(numero, session):
       if tipo == "calendario":
           return _menu_calendario(session)
 
-      # ---------- Menu 8: Reunioes Caxinguele ----------
+      # ---------- Menu 6: Reunioes Caxinguele ----------
       if tipo == "reunioes":
           return _menu_reunioes(session)
+
+      # ---------- Menu 7: YouTube e Videos ----------
+      if tipo == "youtube":
+          opcoes = cat.get("opcoes", [])
+          partes = [f"{o['numero']} para {o['nome']}" for o in opcoes]
+          return _resp(
+              f"{nome}. {', '.join(partes)}. "
+              f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+              end=False,
+              session={**session, "nivel": "submenu", "menu_tipo": "youtube"})
 
       # ---------- Menu 9: Configuracoes ----------
       if tipo == "configuracoes":
@@ -266,14 +300,11 @@ def _selecionar_menu(numero, session):
               end=False,
               session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
 
-      # ---------- Menu 7: Listas Mentais ----------
+      # ---------- Menu 10: Listas Mentais ----------
       if tipo == "listas_mentais":
           return _menu_listas(session)
 
-      # ---------- Menu 8: Configuracoes ----------
-      # (handler ja existente, mantido abaixo)
-
-      # ---------- Menu 9: Voltar ao Menu Principal ----------
+      # ---------- Voltar ao Menu Principal ----------
       if tipo == "voltar_menu":
           return _voltar_menu_principal(session)
 
@@ -1276,6 +1307,34 @@ def _selecionar_submenu(numero, session):
               return _build_audio(titulo, url)
           return _resp(f"{titulo} nao tem audio disponivel.", end=True)
 
+      # ---------- YouTube: submenu ----------
+      if menu_tipo == "youtube":
+          if numero == NUM_REPETIR:
+              return _resp(
+                  "YouTube e Videos. 1 para Ultimas Atualizacoes YT. "
+                  "2 para Pesquisar no YouTube. 3 para Meus Canais. "
+                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+                  end=False, session=session)
+          if numero == NUM_VOLTAR:
+              return _voltar_menu_principal(session)
+          if numero == 1:
+              return _resp(
+                  "Ultimas Atualizacoes de YouTube ainda nao disponivel. "
+                  "Diga outro numero ou diga voltar.",
+                  end=False, session=session)
+          if numero == 2:
+              return _resp(
+                  "Pesquisa no YouTube ainda nao disponivel. "
+                  "Diga outro numero ou diga voltar.",
+                  end=False, session=session)
+          if numero == 3:
+              return _resp(
+                  "Meus Canais ainda nao disponivel. "
+                  "Diga outro numero ou diga voltar.",
+                  end=False, session=session)
+          return _resp("Opcao invalida. 1 para Atualizacoes. 2 para Pesquisar. 3 para Canais.",
+                        end=False, session=session)
+
       # ---------- Configuracoes: submenu principal ----------
       if menu_tipo == "configuracoes":
           if numero == NUM_REPETIR:
@@ -1888,7 +1947,8 @@ def _enumerar_menu_principal(menu, documentos):
           tipo = cat.get("tipo", "filtro")
           # Menus permanentes (sempre aparecem)
           if tipo in ("recentes", "gravacao", "configuracoes", "favoritos",
-                       "musica", "calendario", "reunioes", "listas_mentais"):
+                       "musica", "calendario", "reunioes", "listas_mentais",
+                       "youtube"):
               partes.append(f"{num} para {nome}")
           else:
               # tipo filtro: so aparece se tiver documentos

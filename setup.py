@@ -5,9 +5,16 @@ Verifica e configura dependências, caminhos, credenciais
 """
 
 import sys
+import os
 import subprocess
 import json
 from pathlib import Path
+
+# Fix encoding no Windows (evita crash com caracteres especiais)
+if sys.platform == "win32":
+    os.environ.setdefault("PYTHONUTF8", "1")
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
 
 def check_python():
     """Verifica versão Python"""

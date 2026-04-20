@@ -114,6 +114,13 @@ Vozes disponíveis:
         help='Retomar processamento do checkpoint'
     )
 
+    parser.add_argument(
+        '--titulo',
+        type=str,
+        default=None,
+        help='Titulo do livro (sobrescreve metadados do arquivo)'
+    )
+
     args = parser.parse_args()
 
     # Valida que pelo menos um arquivo foi informado
@@ -208,6 +215,10 @@ def executar_pipeline(args):
 
             # Usa processador multi-formato
             livro = processar_documento(caminho_doc)
+
+            # Sobrescreve titulo se --titulo foi passado
+            if args.titulo:
+                livro.titulo = args.titulo
 
             # Classifica tipo do documento
             texto_amostra = ""
