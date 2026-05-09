@@ -31,6 +31,9 @@ logger.setLevel(logging.INFO)
 
 RSS_BASE_URL = "https://andrezoepaiva-commits.github.io/caxinguele-audiobooks"
 
+# F4: Sino curto enfileirado entre capitulos (UPLOAD MANUAL DE sino.mp3 NO REPO PAGES)
+SINO_URL = f"{RSS_BASE_URL}/sino.mp3"
+
 # Menu padrao sincronizado com o Labirinto de Numeros
 # Numeracao sequencial: 0-8 sao opcoes, 9 = voltar ao menu principal
 MENU_DEFAULT = [
@@ -54,6 +57,7 @@ NUM_VOLTAR  = 99
 DYNAMODB_TABLE           = "caxinguele_progresso"
 DYNAMODB_LISTENING_TABLE = "caxinguele_listening_history"  # tempo de leitura por sessao
 TOKEN_SEPARADOR = "|||"  # usado no token do AudioPlayer: "livro_base|||capitulo_idx"
+REWIND_MS = 10000  # rebobinar 10s no resume (TTS sem pausa natural entre frases)
 
 
 # ==================== PONTO DE ENTRADA ====================
@@ -78,11 +82,12 @@ def lambda_handler(event, context):
               return handle_playback_started(event)
           elif request_type == "AudioPlayer.PlaybackStopped":
               return handle_playback_stopped(event)
-          elif request_type in ("AudioPlayer.PlaybackFinished", "AudioPlayer.PlaybackNearlyFinished",
-                                 "AudioPlayer.PlaybackFailed"):
+          elif request_type == "AudioPlayer.PlaybackNearlyFinished":
+              return handle_playback_nearly_finished(event)
+          elif request_type in ("AudioPlayer.PlaybackFinished", "AudioPlayer.PlaybackFailed"):
               return {"version": "1.0", "response": {}}
           else:
-              return _resp("Desculpe, nao entendi.")
+              return _resp("Nao entendi. Tente dizer o numero do menu, ou diga ajuda.", end=False)
 
       except Exception as e:
           logger.error(f"ERRO CRITICO: {str(e)}", exc_info=True)
@@ -92,22 +97,64 @@ def lambda_handler(event, context):
 # ==================== LAUNCH ====================
 
 def handle_launch(event):
-      """Abertura: mostra menu principal (nivel 1). Carrega progresso salvo."""
+      """Abertura: mostra menu principal (nivel 1). Se tem livro em andamento, oferece retomar."""
       documentos, menu = _buscar_dados_completos()
       user_id = _get_user_id(event)
       progresso = _carregar_progresso(user_id)
+      flags = _carregar_flags(user_id)
 
-      texto = _enumerar_menu_principal(menu, documentos)
       session = {
           "nivel":      "menu",
           "todos_docs": json.dumps(documentos),
           "menu":       json.dumps(menu),
           "user_id":    user_id,
           "progresso":  json.dumps(progresso),
+          # Flags persistentes injetadas na session (sobrevivem entre sessoes via DynamoDB)
+          "avisado_ja_lidos": "true" if flags.get("avisado_ja_lidos") else "false",
+          "onboarding_feito": "true" if flags.get("onboarding_feito") else "false",
       }
 
+      # F3: Onboarding na 1a vez — explica navegacao basica antes do menu
+      prefixo_onboarding = ""
+      if not flags.get("onboarding_feito"):
+          # Extrai o numero real do menu "Livros" (pode mudar entre deploys via indice.json)
+          livros_num = next((m["numero"] for m in menu if m.get("nome", "").lower() == "livros"), 2)
+          prefixo_onboarding = (
+              "Bem vindo ao Caxinguele Audiobooks. "
+              "Aqui estao seus audiolivros. "
+              f"Voce navega falando numeros. Por exemplo, diga {livros_num} para Livros, depois o numero do livro, depois 1 para comecar do inicio. "
+              "A qualquer hora, diga pausa para parar. Diga continuar para retomar de onde parou. "
+              "Diga ajuda quando quiser ouvir todos os comandos. "
+              "Vamos comecar. "
+          )
+          _salvar_flag(user_id, "onboarding_feito", True)
+          session["onboarding_feito"] = "true"
+
+      prefixo_retomar = ""
+      if progresso:
+          try:
+              # Pega o livro mais RECENTE pelo timestamp (nao o de maior cap_idx)
+              ultimo_livro = max(progresso, key=lambda k: progresso[k].get("ts", ""))
+              cap_idx = int(progresso[ultimo_livro].get("cap_idx", 0))
+              livros = _agrupar_livros(documentos)
+              livro = next((l for l in livros if l["livro_base"] == ultimo_livro), None)
+              if livro and livro.get("capitulos"):
+                  total_caps = len(livro["capitulos"])
+                  nome_livro = livro["titulo"]
+                  prefixo_retomar = (
+                      f"Bem vindo de volta. Voce estava ouvindo {nome_livro}, "
+                      f"capitulo {cap_idx + 1} de {total_caps}. "
+                      "Diga continuar para retomar. Ou escolha um menu. "
+                  )
+          except Exception as e:
+              logger.info(f"Sem progresso para retomar: {e}")
+
+      texto_menu = _enumerar_menu_principal(menu, documentos)
+      texto = prefixo_onboarding + prefixo_retomar + texto_menu
+
       _registrar_uso("_abertura", "launch", len(documentos))
-      return _resp(texto, end=False, reprompt="Diga o numero.", session=session)
+      reprompt = "Diga continuar ou o numero do menu." if progresso else "Diga o numero do menu."
+      return _resp(texto, end=False, reprompt=reprompt, session=session)
 
 
 # ==================== DISPATCHER ====================
@@ -133,14 +180,18 @@ def handle_intent(event):
               }
           }
       if intent_name == "AMAZON.ResumeIntent":
-          # Retoma o ultimo livro/capitulo do DynamoDB
+          # Retoma o ultimo livro do DynamoDB no offset salvo (com rebobinada)
           try:
               user_id = _get_user_id(event)
               progresso = _carregar_progresso(user_id)
               if progresso:
-                  # Pega livro com capitulo mais avancado (sem timestamp, melhor heuristica disponivel)
-                  ultimo_livro = max(progresso, key=lambda k: progresso[k])
-                  cap_idx = int(progresso[ultimo_livro])
+                  # Pega o livro mais RECENTE pelo timestamp
+                  ultimo_livro = max(progresso, key=lambda k: progresso[k].get("ts", ""))
+                  prog = progresso[ultimo_livro]
+                  cap_idx = int(prog.get("cap_idx", 0))
+                  offset_salvo = int(prog.get("offset_ms", 0))
+                  # Rebobina REWIND_MS para dar contexto (TTS sem pausa natural)
+                  offset_resume = max(0, offset_salvo - REWIND_MS)
                   documentos, _ = _buscar_dados_completos()
                   livros = _agrupar_livros(documentos)
                   livro = next((l for l in livros if l["livro_base"] == ultimo_livro), None)
@@ -152,16 +203,30 @@ def handle_intent(event):
                           if url:
                               token = f"{ultimo_livro}{TOKEN_SEPARADOR}{cap_idx}"
                               cap_titulo = _titulo_curto(cap.get("titulo", f"Capitulo {cap_idx + 1}"))
-                              return _build_audio(f"Continuando: {cap_titulo}", url, token=token)
+                              return _build_audio(
+                                  f"Continuando: {cap_titulo}",
+                                  url,
+                                  token=token,
+                                  total_capitulos=len(caps),
+                                  offset_ms=offset_resume,
+                              )
+              documentos, menu = _buscar_dados_completos()
+              user_id = _get_user_id(event)
+              full_session = {
+                  "nivel": "menu",
+                  "todos_docs": json.dumps(documentos),
+                  "menu": json.dumps(menu),
+                  "user_id": user_id,
+              }
+              texto_menu = _enumerar_menu_principal(menu, documentos)
               return _resp(
-                  "Nenhum livro em andamento. Diga: Alexa, abre meus audiobooks. "
-                  "Para escolher um livro.",
-                  end=True)
+                  "Nenhum livro em andamento ainda. " + texto_menu,
+                  end=False, session=full_session)
           except Exception as e:
               logger.warning(f"ResumeIntent erro: {e}")
               return _resp(
-                  "Nao consegui retomar. Diga: Alexa, abre meus audiobooks.",
-                  end=True)
+                  "Nao consegui retomar. Diga o numero do menu ou diga ajuda.",
+                  end=False, session=session)
       if intent_name == "AMAZON.HelpIntent":
           return _handle_ajuda(session)
       if intent_name in ("ListarDocumentosIntent", "AMAZON.NavigateHomeIntent"):
@@ -191,6 +256,108 @@ def handle_intent(event):
           return _handle_novidades(session)
       if intent_name == "LerDocumentoIntent":
           return _handle_ler_documento(slots, session)
+
+      # Paginacao da lista de livros
+      if intent_name == "PaginaProximaIntent":
+          if session.get("menu_tipo") == "livros":
+              pagina = int(session.get("pagina_livros", "1"))
+              # F4 fix: detectar fim da lista antes de tentar avancar
+              livros_dados = _obter_json(session, "livros_dados") or []
+              progresso = _obter_json(session, "progresso") or {}
+              cats = _categorizar_livros(livros_dados, progresso)
+              mostrar = session.get("mostrar_ja_lidos") == "true"
+              visiveis = cats["em_progresso"] + cats["nunca_lidos"] + cats["em_progresso_abandonados"]
+              if mostrar:
+                  visiveis = visiveis + cats["ja_lidos"]
+              total_paginas = max(1, (len(visiveis) + PAGINA_TAM_LIVROS - 1) // PAGINA_TAM_LIVROS)
+              if pagina >= total_paginas:
+                  return _resp(
+                      "Esses sao todos os seus livros. Diga o numero que quer ouvir, ou voltar.",
+                      end=False, session=session)
+              new_session = {**session, "pagina_livros": str(pagina + 1)}
+              return _render_pagina_livros(new_session, mostrar_ja_lidos=mostrar)
+          return _resp("Diga proximos so na lista de livros.", end=False, session=session)
+      if intent_name == "PaginaAnteriorIntent":
+          if session.get("menu_tipo") == "livros":
+              pagina = int(session.get("pagina_livros", "1"))
+              new_session = {**session, "pagina_livros": str(max(1, pagina - 1))}
+              mostrar = session.get("mostrar_ja_lidos") == "true"
+              return _render_pagina_livros(new_session, mostrar_ja_lidos=mostrar)
+          return _resp("Diga anterior so na lista de livros.", end=False, session=session)
+      if intent_name == "MostrarOuvidosIntent":
+          if session.get("menu_tipo") == "livros":
+              # P2e (S246): checar se ha ja_lidos antes de listar
+              livros_dados = _obter_json(session, "livros_dados") or []
+              progresso = _obter_json(session, "progresso") or {}
+              cats = _categorizar_livros(livros_dados, progresso)
+              if not cats["ja_lidos"]:
+                  return _resp(
+                      "Voce ainda nao terminou nenhum livro completo. Diga voltar pra lista.",
+                      end=False, session=session)
+              # Persiste flag no DynamoDB pra nao avisar mais em sessoes futuras (fix F3)
+              user_id = _get_user_id(event)
+              _salvar_flag(user_id, "avisado_ja_lidos", True)
+              new_session = {
+                  **session,
+                  "pagina_livros":      "1",
+                  "mostrar_ja_lidos":   "true",
+                  "avisado_ja_lidos":   "true",
+              }
+              return _render_pagina_livros(new_session, mostrar_ja_lidos=True)
+          return _resp("Diga ouvidos so na lista de livros.", end=False, session=session)
+
+      # F5: esquecer livro abandonado (remove do progresso)
+      if intent_name == "EsquecerLivroIntent":
+          if session.get("menu_tipo") != "livros":
+              return _resp(
+                  "Diga esquecer so quando estiver na lista de Livros.",
+                  end=False, session=session)
+          numero = _extrair_numero(slots, "numero")
+          if numero is None:
+              numero = _extrair_numero_da_fala(event)
+          if numero is None:
+              # P2b: usuario falou so "esquecer" sem numero
+              return _resp("Esquecer qual numero? Diga por exemplo: esquecer 3.",
+                            end=False, session=session)
+          visiveis = _livros_visiveis(session)
+          if not (1 <= numero <= len(visiveis)):
+              return _resp(f"Numero {numero} nao existe. Diga repetir.",
+                            end=False, session=session)
+          livro = visiveis[numero - 1]
+          livro_base = livro.get("livro_base", "")
+          titulo_curto = livro.get("titulo", "?")
+          # P2c: verificar se o livro tem progresso ANTES de tentar esquecer
+          progresso = _obter_json(session, "progresso") or {}
+          if livro_base not in progresso:
+              return _resp(
+                  f"{titulo_curto} nao tem progresso pra esquecer. Voce ainda nao comecou a ouvir esse livro.",
+                  end=False, session=session)
+          user_id = _get_user_id(event)
+          ok = _esquecer_livro(user_id, livro_base)
+          # Atualiza progresso na session pra refletir mudanca imediatamente
+          progresso.pop(livro_base, None)
+          new_session = {
+              **session,
+              "progresso":      json.dumps(progresso),
+              "pagina_livros":  "1",
+          }
+          if ok:
+              # Render com aviso de confirmacao prepended (suporta PlainText E SSML)
+              resp = _render_pagina_livros(new_session, mostrar_ja_lidos=session.get("mostrar_ja_lidos") == "true")
+              try:
+                  out = resp["response"]["outputSpeech"]
+                  if out.get("type") == "SSML" and out.get("ssml"):
+                      # Insere confirmacao logo apos <speak> (preserva tags prosody)
+                      ssml = out["ssml"]
+                      texto_seguro = titulo_curto.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                      out["ssml"] = ssml.replace("<speak>", f"<speak>{texto_seguro} foi esquecido. ", 1)
+                  else:
+                      out["text"] = f"{titulo_curto} foi esquecido. {out.get('text', '')}"
+              except Exception as e:
+                  logger.warning(f"Erro ao prepend confirmacao esquecer: {e}")
+              return resp
+          return _resp(f"Nao consegui esquecer {titulo_curto}. Erro tecnico, tente de novo.",
+                        end=False, session=session)
 
       # Fallback: tenta extrair numero da fala bruta
       if intent_name == "AMAZON.FallbackIntent":
@@ -239,7 +406,7 @@ def _selecionar_menu(numero, session):
 
       cat = next((c for c in menu if c.get("numero") == numero), None)
       if not cat:
-          return _resp(f"Numero {numero} invalido. " + _enumerar_menu_principal(menu, todos_docs),
+          return _resp(f"Nao encontrei o menu {numero}. " + _enumerar_menu_principal(menu, todos_docs),
                         end=False, session=session)
 
       tipo = cat.get("tipo", "filtro")
@@ -287,7 +454,7 @@ def _selecionar_menu(numero, session):
           partes = [f"{o['numero']} para {o['nome']}" for o in opcoes]
           return _resp(
               f"{nome}. {', '.join(partes)}. "
-              f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+              "Diga repetir ou voltar.",
               end=False,
               session={**session, "nivel": "submenu", "menu_tipo": "youtube"})
 
@@ -296,7 +463,7 @@ def _selecionar_menu(numero, session):
           return _resp(
               f"{nome}. 1 para Velocidade da Fala. "
               "2 para Guia do Usuario. "
-              f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+              "Diga repetir ou voltar.",
               end=False,
               session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
 
@@ -334,29 +501,117 @@ def _get_dynamo():
 
 
 def _carregar_progresso(user_id):
-      """Carrega progresso salvo do usuario (qual capitulo estava em cada livro)."""
+      """Carrega progresso salvo. Migra entradas legado (int) pro schema novo (dict).
+
+      Schema novo: {livro_base: {"cap_idx": int, "offset_ms": int, "ts": str}}
+      Schema legado: {livro_base: int}  (so cap_idx)
+      """
       try:
           table = _get_dynamo().Table(DYNAMODB_TABLE)
           resp = table.get_item(Key={"user_id": user_id})
-          return resp.get("Item", {}).get("progresso", {})
+          bruto = resp.get("Item", {}).get("progresso", {})
+          progresso = {}
+          for livro, valor in bruto.items():
+              if isinstance(valor, dict):
+                  progresso[livro] = valor
+              else:
+                  # Migracao on-read: legado (int) -> dict
+                  progresso[livro] = {"cap_idx": int(valor), "offset_ms": 0, "ts": ""}
+          return progresso
       except Exception as e:
           logger.info(f"Progresso nao encontrado (normal na 1a vez): {e}")
           return {}
 
 
-def _salvar_progresso(user_id, livro_base, capitulo_idx):
-      """Salva em qual capitulo o usuario esta."""
+def _salvar_progresso(user_id, livro_base, capitulo_idx, offset_ms=0):
+      """Salva capitulo, offset de audio e timestamp.
+
+      offset_ms=0 quando muda de capitulo. Valor real vem de PlaybackStopped.
+      timestamp atualizado a cada save permite rastrear "ultimo livro ouvido".
+
+      Faz 2 update_items sequenciais: primeiro garante que o mapa "progresso"
+      exista (cria item ou atributo se for 1a vez do usuario), depois faz o
+      SET aninhado. Sem isso, primeiro save de usuario novo da
+      ValidationException silenciosa (item ou atributo nao existe).
+      """
+      try:
+          timestamp = datetime.utcnow().isoformat() + "Z"
+          table = _get_dynamo().Table(DYNAMODB_TABLE)
+          # Passo 1: garante mapa "progresso" no item (idempotente)
+          table.update_item(
+              Key={"user_id": user_id},
+              UpdateExpression="SET progresso = if_not_exists(progresso, :empty)",
+              ExpressionAttributeValues={":empty": {}},
+          )
+          # Passo 2: SET aninhado da entrada do livro
+          table.update_item(
+              Key={"user_id": user_id},
+              UpdateExpression="SET progresso.#livro = :p",
+              ExpressionAttributeNames={"#livro": livro_base},
+              ExpressionAttributeValues={":p": {
+                  "cap_idx": int(capitulo_idx),
+                  "offset_ms": int(offset_ms),
+                  "ts": timestamp,
+              }},
+          )
+          logger.info(f"Progresso salvo: {livro_base} cap {capitulo_idx} offset {offset_ms}ms")
+      except Exception as e:
+          logger.warning(f"Erro ao salvar progresso: {e}")
+
+
+def _esquecer_livro(user_id, livro_base):
+      """F5: Remove entrada do livro do mapa progresso. Livro vira 'nunca lido' visualmente."""
+      if not user_id or not livro_base:
+          return False
       try:
           table = _get_dynamo().Table(DYNAMODB_TABLE)
           table.update_item(
               Key={"user_id": user_id},
-              UpdateExpression="SET progresso.#livro = :cap",
-              ExpressionAttributeNames={"#livro": livro_base},
-              ExpressionAttributeValues={":cap": int(capitulo_idx)},
+              UpdateExpression="REMOVE progresso.#l",
+              ExpressionAttributeNames={"#l": livro_base},
           )
-          logger.info(f"Progresso salvo: {livro_base} cap {capitulo_idx}")
+          logger.info(f"Livro esquecido: {livro_base}")
+          return True
       except Exception as e:
-          logger.warning(f"Erro ao salvar progresso: {e}")
+          logger.warning(f"Erro ao esquecer livro {livro_base}: {e}")
+          return False
+
+
+# ==================== DYNAMODB: FLAGS PERSISTENTES (avisado_ja_lidos, etc) ====================
+
+def _carregar_flags(user_id):
+      """Carrega flags persistentes do usuario do DynamoDB. Retorna dict (vazio se nao existe)."""
+      if not user_id:
+          return {}
+      try:
+          table = _get_dynamo().Table(DYNAMODB_TABLE)
+          resp = table.get_item(Key={"user_id": user_id})
+          return resp.get("Item", {}).get("flags", {}) or {}
+      except Exception as e:
+          logger.info(f"Sem flags ainda (normal na 1a vez): {e}")
+          return {}
+
+
+def _salvar_flag(user_id, nome, valor):
+      """Salva uma flag boolean no DynamoDB. Garante mapa flags via if_not_exists (mesmo padrao do progresso)."""
+      if not user_id:
+          return
+      try:
+          table = _get_dynamo().Table(DYNAMODB_TABLE)
+          table.update_item(
+              Key={"user_id": user_id},
+              UpdateExpression="SET flags = if_not_exists(flags, :empty)",
+              ExpressionAttributeValues={":empty": {}},
+          )
+          table.update_item(
+              Key={"user_id": user_id},
+              UpdateExpression="SET flags.#f = :v",
+              ExpressionAttributeNames={"#f": nome},
+              ExpressionAttributeValues={":v": bool(valor)},
+          )
+          logger.info(f"Flag salva: {nome}={valor}")
+      except Exception as e:
+          logger.warning(f"Erro ao salvar flag {nome}: {e}")
 
 
 # ==================== DYNAMODB: TEMPO DE LEITURA ====================
@@ -521,6 +776,189 @@ def _agrupar_livros(docs):
       return livros
 
 
+DIAS_PARA_ABANDONO = 14  # F5: livro parado >N dias vira "abandonado" (perde destaque)
+
+
+def _dias_parado(ts_str):
+      """Calcula dias desde o ultimo timestamp do progresso. Retorna 999 se ts invalido."""
+      if not ts_str:
+          return 999
+      try:
+          ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+          agora = datetime.utcnow().replace(tzinfo=ts.tzinfo)
+          return (agora - ts).days
+      except Exception:
+          return 999
+
+
+def _categorizar_livros(livros, progresso):
+      """Separa livros em 4 grupos: em_progresso (ativos), em_progresso_abandonados, nunca_lidos, ja_lidos.
+      Ativo = cap_idx > 0, parado <=14 dias.
+      Abandonado (F5) = cap_idx > 0, parado >14 dias — perde destaque.
+      Ja lido = ultimo cap E offset_ms > MIN_OFFSET_OUVIDO (>=60s ouvido do ultimo cap).
+        P2e: criterio fortalecido em S246 — sem offset min, livros pulados via "escolher capitulo"
+        sem ouvir contavam como ja_lidos por engano.
+      Nunca lido = sem entrada de progresso ou cap_idx == 0 (e sem offset).
+      """
+      MIN_OFFSET_OUVIDO_MS = 60_000  # 60s do ultimo cap = qualifica como ouvido
+      em_progresso = []
+      em_progresso_abandonados = []
+      nunca_lidos = []
+      ja_lidos = []
+      for livro in livros:
+          livro_base = livro.get("livro_base", "")
+          prog = progresso.get(livro_base) if isinstance(progresso, dict) else None
+          if not prog:
+              nunca_lidos.append(livro)
+              continue
+          if isinstance(prog, dict):
+              cap_idx = int(prog.get("cap_idx", 0))
+              offset_ms = int(prog.get("offset_ms", 0))
+              ts = prog.get("ts", "")
+          else:
+              cap_idx = int(prog)
+              offset_ms = 0
+              ts = ""
+          livro_meta = {**livro, "_ts": ts, "_cap_idx": cap_idx}
+          total = livro.get("total_capitulos", 0)
+          # P2e (S246): livro 1 cap unico vira ja_lido SO se offset_ms >= 60s
+          if total == 1 and offset_ms >= MIN_OFFSET_OUVIDO_MS:
+              ja_lidos.append(livro_meta)
+          # P2e (S246): multicap vira ja_lido SO se ultimo cap E ouviu >= 60s dele
+          elif total > 0 and cap_idx >= total - 1 and cap_idx > 0 and offset_ms >= MIN_OFFSET_OUVIDO_MS:
+              ja_lidos.append(livro_meta)
+          elif cap_idx > 0:
+              # F5: separar ativo de abandonado pelo numero de dias parado
+              dias = _dias_parado(ts)
+              livro_meta["_dias_parado"] = dias
+              if dias > DIAS_PARA_ABANDONO:
+                  em_progresso_abandonados.append(livro_meta)
+              else:
+                  em_progresso.append(livro_meta)
+          else:
+              nunca_lidos.append(livro)
+      em_progresso.sort(key=lambda l: l.get("_ts", ""), reverse=True)
+      em_progresso_abandonados.sort(key=lambda l: l.get("_ts", ""), reverse=True)
+      ja_lidos.sort(key=lambda l: l.get("_ts", ""), reverse=True)
+      nunca_lidos.sort(key=lambda l: l.get("titulo", "").lower())
+      return {
+          "em_progresso":              em_progresso,
+          "em_progresso_abandonados":  em_progresso_abandonados,
+          "nunca_lidos":               nunca_lidos,
+          "ja_lidos":                  ja_lidos,
+      }
+
+
+def _livros_visiveis(session):
+      """Lista visivel de livros na ordem mostrada.
+      Ordem (F5): ativos -> nunca_lidos -> abandonados -> (opcional) ja_lidos.
+      Abandonados perdem destaque mas continuam acessiveis.
+      Mesma ordem usada por _render_pagina_livros, pra _selecionar_submenu indexar correto.
+      """
+      livros_dados = _obter_json(session, "livros_dados") or []
+      progresso = _obter_json(session, "progresso") or {}
+      mostrar_ja_lidos = session.get("mostrar_ja_lidos") == "true"
+      cats = _categorizar_livros(livros_dados, progresso)
+      visiveis = cats["em_progresso"] + cats["nunca_lidos"] + cats["em_progresso_abandonados"]
+      if mostrar_ja_lidos:
+          visiveis = visiveis + cats["ja_lidos"]
+      return visiveis
+
+
+PAGINA_TAM_LIVROS = 5
+
+
+def _render_pagina_livros(session, mostrar_ja_lidos=False):
+      """Renderiza pagina atual de livros com paginacao 5 + categorizacao."""
+      livros_dados = _obter_json(session, "livros_dados") or []
+      progresso = _obter_json(session, "progresso") or {}
+      pagina = int(session.get("pagina_livros", "1"))
+      categoria_nome = session.get("livros_categoria", "")
+
+      cats = _categorizar_livros(livros_dados, progresso)
+      # F5: ordem ativos -> nunca -> abandonados -> opcional ja_lidos
+      visiveis = cats["em_progresso"] + cats["nunca_lidos"] + cats["em_progresso_abandonados"]
+      if mostrar_ja_lidos:
+          visiveis = visiveis + cats["ja_lidos"]
+
+      if not visiveis:
+          texto = f"Nenhum livro disponivel{' em ' + categoria_nome if categoria_nome else ''}. Diga voltar."
+          return _resp(texto, end=False, session={**session, "nivel": "submenu", "menu_tipo": "livros_categorias"})
+
+      total_paginas = max(1, (len(visiveis) + PAGINA_TAM_LIVROS - 1) // PAGINA_TAM_LIVROS)
+      pagina = max(1, min(pagina, total_paginas))
+      inicio = (pagina - 1) * PAGINA_TAM_LIVROS
+      fim = inicio + PAGINA_TAM_LIVROS
+      pagina_livros = visiveis[inicio:fim]
+
+      # Numeracao GLOBAL (nao reseta por pagina)
+      partes = []
+      for i, livro in enumerate(pagina_livros, start=inicio + 1):
+          n_caps = livro["total_capitulos"]
+          cap_idx = livro.get("_cap_idx")
+          dias = livro.get("_dias_parado")
+          if cap_idx is not None and cap_idx > 0:
+              # F5: anuncio diferente pra abandonado
+              if dias is not None and dias > DIAS_PARA_ABANDONO:
+                  partes.append(f"{i}. {livro['titulo']}, abandonado ha {dias} dias no capitulo {cap_idx + 1} de {n_caps}")
+              else:
+                  partes.append(f"{i}. {livro['titulo']}, pausado no capitulo {cap_idx + 1} de {n_caps}")
+          else:
+              caps_txt = f"{n_caps} capitulos" if n_caps > 1 else "1 capitulo"
+              partes.append(f"{i}. {livro['titulo']}, {caps_txt}")
+
+      # Comandos de paginacao
+      cmds = []
+      if pagina < total_paginas:
+          prox_n = min(PAGINA_TAM_LIVROS, len(visiveis) - pagina * PAGINA_TAM_LIVROS)
+          cmds.append(f"diga proximos para mais {prox_n}")
+      if pagina > 1:
+          cmds.append("diga anterior")
+      # F5: dica do comando esquecer quando ha abandonados na pagina atual
+      tem_abandonado_na_pagina = any(
+          (l.get("_dias_parado") is not None and l.get("_dias_parado", 0) > DIAS_PARA_ABANDONO)
+          for l in pagina_livros
+      )
+      if tem_abandonado_na_pagina:
+          cmds.append("diga esquecer e o numero para remover um livro abandonado")
+
+      # Aviso 1a vez sobre ja_lidos (fix F4: redacao mais curta, sem duplicar "Voce tem")
+      avisado = session.get("avisado_ja_lidos") == "true"
+      aviso = ""
+      if cats["ja_lidos"] and not avisado and not mostrar_ja_lidos:
+          n = len(cats["ja_lidos"])
+          plural = "s" if n > 1 else ""
+          aviso = f"Mais {n} livro{plural} ja ouvido{plural} estao escondidos. Diga ouvidos para escutar a lista. "
+
+      # Cabecalho
+      cabecalho = ""
+      if pagina == 1:
+          tot = len(visiveis)
+          plural = "s" if tot > 1 else ""
+          rotulo = "ja ouvidos" if mostrar_ja_lidos else "para ouvir"
+          cabecalho = f"Voce tem {tot} livro{plural} {rotulo}. "
+      if total_paginas > 1:
+          cabecalho += f"Pagina {pagina} de {total_paginas}. "
+
+      cmds_txt = ". ".join(cmds) + ". " if cmds else ""
+      texto = (
+          f"{cabecalho}{'. '.join(partes)}. "
+          f"{aviso}"
+          f"Para ouvir um livro, diga o numero. {cmds_txt}"
+          "Diga repetir ou voltar."
+      )
+
+      new_session = {
+          **session,
+          "nivel":             "submenu",
+          "menu_tipo":         "livros",
+          "pagina_livros":     str(pagina),
+          "mostrar_ja_lidos":  "true" if mostrar_ja_lidos else "false",
+      }
+      reprompt = "Diga o numero do livro, proximos, anterior, ou voltar."
+      return _resp(texto, end=False, reprompt=reprompt, session=new_session)
+
+
 def _pular_capitulo_sessao(session, direcao):
       """Pula para próximo/anterior capítulo ou música com base na sessao ativa."""
       # Se estiver tocando musica, pula na playlist
@@ -557,7 +995,7 @@ def _pular_capitulo_sessao(session, direcao):
       if novo_cap >= len(capitulos):
           return _resp(
               "Fim do livro! Voce ouviu todos os capitulos. "
-              f"{NUM_VOLTAR} para voltar ao menu.",
+              "Diga voltar para o menu.",
               end=False, session=session)
 
       cap = capitulos[novo_cap]
@@ -570,27 +1008,30 @@ def _pular_capitulo_sessao(session, direcao):
               _salvar_progresso(user_id, livro_base, novo_cap)
           token = f"{livro_base}{TOKEN_SEPARADOR}{novo_cap}"
           new_session = {**session, "capitulo_atual": str(novo_cap)}
-          return _build_audio(titulo, url, token=token, session_extra=new_session)
+          return _build_audio(titulo, url, token=token, session_extra=new_session, total_capitulos=len(capitulos))
 
       return _resp(
           f"Capitulo {novo_cap + 1} sem audio disponivel. "
-          f"Tente outro ou diga {NUM_VOLTAR} para voltar.",
+          "Tente outro ou diga voltar.",
           end=False, session=session)
 
 
 def handle_playback_started(event):
-      """Quando AudioPlayer comeca a tocar, salva progresso e registra inicio de sessao."""
+      """Quando AudioPlayer comeca a tocar, salva progresso (preservando offset inicial) e registra inicio."""
       try:
-          token = event.get("request", {}).get("token", "")
+          request = event.get("request", {})
+          token = request.get("token", "")
+          # offsetInMilliseconds do Started = posicao inicial do play (preserva resume)
+          offset_ms = int(request.get("offsetInMilliseconds", 0))
           user_id = _get_user_id(event)
-          timestamp = event.get("request", {}).get("timestamp", datetime.utcnow().isoformat() + "Z")
+          timestamp = request.get("timestamp", datetime.utcnow().isoformat() + "Z")
           if TOKEN_SEPARADOR in token and user_id:
               partes = token.split(TOKEN_SEPARADOR)
-              # Nao salva progresso de musica, so de livros/artigos
-              if partes[0] != "MUSICA":
+              # Nao salva progresso de musica nem de SINO (sino e auxiliar entre capitulos, F4)
+              if partes[0] not in ("MUSICA", "SINO"):
                   livro_base = partes[0]
                   capitulo_idx = int(partes[1])
-                  _salvar_progresso(user_id, livro_base, capitulo_idx)
+                  _salvar_progresso(user_id, livro_base, capitulo_idx, offset_ms)
                   # Registra inicio da sessao de escuta para calcular tempo depois
                   _registrar_sessao_inicio(user_id, token, timestamp)
       except Exception as e:
@@ -599,16 +1040,143 @@ def handle_playback_started(event):
 
 
 def handle_playback_stopped(event):
-      """Quando usuario para o audio, calcula e salva minutos ouvidos no DynamoDB."""
+      """Quando usuario para o audio: salva offset (pra retomar do mesmo ponto) + minutos ouvidos."""
       try:
-          token = event.get("request", {}).get("token", "")
+          request = event.get("request", {})
+          token = request.get("token", "")
+          offset_ms = int(request.get("offsetInMilliseconds", 0))
           user_id = _get_user_id(event)
-          timestamp = event.get("request", {}).get("timestamp", datetime.utcnow().isoformat() + "Z")
-          # Nao rastreia paradas de musica
-          if TOKEN_SEPARADOR in token and token.split(TOKEN_SEPARADOR)[0] != "MUSICA":
+          timestamp = request.get("timestamp", datetime.utcnow().isoformat() + "Z")
+          # Nao rastreia paradas de musica nem de SINO (auxiliar F4)
+          if TOKEN_SEPARADOR in token and token.split(TOKEN_SEPARADOR)[0] not in ("MUSICA", "SINO"):
+              partes = token.split(TOKEN_SEPARADOR)
+              livro_base = partes[0]
+              cap_idx = int(partes[1])
+              if user_id and livro_base:
+                  _salvar_progresso(user_id, livro_base, cap_idx, offset_ms)
               _registrar_sessao_fim(user_id, token, timestamp)
       except Exception as e:
           logger.warning(f"Erro ao registrar parada de audio: {e}")
+      return {"version": "1.0", "response": {}}
+
+
+def handle_playback_nearly_finished(event):
+      """Auto-avanco: enfileira proximo audio. Para LIVROS, intercala SINO entre capitulos (F4 Opcao B).
+      Fluxo: cap_atual → sino → cap_proximo → sino → ...
+      Token SINO: SINO|||{livro_base}|||{prox_cap_idx} (3 partes, vs 2 do livro normal).
+      """
+      try:
+          token = event.get("request", {}).get("token", "")
+          if TOKEN_SEPARADOR not in token:
+              return {"version": "1.0", "response": {}}
+
+          partes = token.split(TOKEN_SEPARADOR)
+          tipo_audio = partes[0]
+
+          # ===== Caso 1: MUSICA terminando — enfileira proxima musica (sem sino) =====
+          if tipo_audio == "MUSICA":
+              idx_atual = int(partes[1])
+              musicas = _buscar_musicas_json()
+              musicas_com_url = [m for m in musicas if m.get("url")]
+              novo_idx = idx_atual + 1
+              if novo_idx < len(musicas_com_url):
+                  m = musicas_com_url[novo_idx]
+                  novo_token = f"MUSICA{TOKEN_SEPARADOR}{novo_idx}"
+                  return {
+                      "version": "1.0",
+                      "response": {
+                          "directives": [{
+                              "type": "AudioPlayer.Play",
+                              "playBehavior": "ENQUEUE",
+                              "audioItem": {
+                                  "stream": {
+                                      "url": m["url"],
+                                      "token": novo_token,
+                                      "expectedPreviousToken": token,
+                                      "offsetInMilliseconds": 0,
+                                  },
+                                  "metadata": {
+                                      "title": m.get("titulo", f"Musica {novo_idx + 1}"),
+                                      "subtitle": "Super Alexa — Caxinguele",
+                                  }
+                              }
+                          }]
+                      }
+                  }
+              return {"version": "1.0", "response": {}}
+
+          # ===== Caso 2: SINO terminando — enfileira proximo capitulo real =====
+          if tipo_audio == "SINO" and len(partes) >= 3:
+              livro_base = partes[1]
+              prox_cap_idx = int(partes[2])
+              documentos, _ = _buscar_dados_completos()
+              docs_livro = [d for d in documentos if _extrair_livro_base(d.get("titulo", "")) == livro_base]
+              docs_livro.sort(key=lambda d: _extrair_num_capitulo(d.get("titulo", "")))
+              if prox_cap_idx < len(docs_livro):
+                  cap = docs_livro[prox_cap_idx]
+                  url = cap.get("url_audio", "")
+                  if url:
+                      novo_token = f"{livro_base}{TOKEN_SEPARADOR}{prox_cap_idx}"
+                      user_id = _get_user_id(event)
+                      if user_id:
+                          _salvar_progresso(user_id, livro_base, prox_cap_idx)
+                      return {
+                          "version": "1.0",
+                          "response": {
+                              "directives": [{
+                                  "type": "AudioPlayer.Play",
+                                  "playBehavior": "ENQUEUE",
+                                  "audioItem": {
+                                      "stream": {
+                                          "url": url,
+                                          "token": novo_token,
+                                          "expectedPreviousToken": token,
+                                          "offsetInMilliseconds": 0,
+                                      },
+                                      "metadata": {
+                                          "title": _titulo_curto(cap.get("titulo", f"Capitulo {prox_cap_idx + 1}")),
+                                          "subtitle": f"{livro_base} — Super Alexa",
+                                      }
+                                  }
+                              }]
+                          }
+                      }
+              return {"version": "1.0", "response": {}}
+
+          # ===== Caso 3: LIVRO terminando — enfileira SINO antes do proximo cap =====
+          livro_base = tipo_audio
+          idx_atual = int(partes[1])
+          documentos, _ = _buscar_dados_completos()
+          docs_livro = [d for d in documentos if _extrair_livro_base(d.get("titulo", "")) == livro_base]
+          docs_livro.sort(key=lambda d: _extrair_num_capitulo(d.get("titulo", "")))
+          novo_cap = idx_atual + 1
+          if novo_cap < len(docs_livro):
+              # Enfileira SINO; quando sino acabar, NearlyFinished do sino enfileira o cap real
+              sino_token = f"SINO{TOKEN_SEPARADOR}{livro_base}{TOKEN_SEPARADOR}{novo_cap}"
+              return {
+                  "version": "1.0",
+                  "response": {
+                      "directives": [{
+                          "type": "AudioPlayer.Play",
+                          "playBehavior": "ENQUEUE",
+                          "audioItem": {
+                              "stream": {
+                                  "url": SINO_URL,
+                                  "token": sino_token,
+                                  "expectedPreviousToken": token,
+                                  "offsetInMilliseconds": 0,
+                              },
+                              "metadata": {
+                                  "title": "Capitulo terminado",
+                                  "subtitle": f"{livro_base} — Super Alexa",
+                              }
+                          }
+                      }]
+                  }
+              }
+          # Fim do livro — nao enfileira nada (fica em silencio, usuario decide voltar)
+      except Exception as e:
+          logger.warning(f"Erro ao enfileirar proximo: {e}")
       return {"version": "1.0", "response": {}}
 
 
@@ -620,6 +1188,9 @@ def handle_playback_next(event):
           if TOKEN_SEPARADOR in token:
               partes = token.split(TOKEN_SEPARADOR)
               tipo_audio = partes[0]
+              # F4: SINO e transicao curta entre caps — ignora Next (deixa sino terminar normalmente)
+              if tipo_audio == "SINO":
+                  return {"version": "1.0", "response": {}}
               idx_atual = int(partes[1])
 
               # --- Musica: proxima da playlist ---
@@ -654,7 +1225,7 @@ def handle_playback_next(event):
                       novo_token = f"{livro_base}{TOKEN_SEPARADOR}{novo_cap}"
                       if url:
                           _salvar_progresso(user_id, livro_base, novo_cap)
-                          return _build_audio(titulo, url, token=novo_token)
+                          return _build_audio(titulo, url, token=novo_token, total_capitulos=len(docs_livro))
       except Exception as e:
           logger.warning(f"Erro handle_playback_next: {e}")
       return {"version": "1.0", "response": {}}
@@ -668,6 +1239,9 @@ def handle_playback_prev(event):
           if TOKEN_SEPARADOR in token:
               partes = token.split(TOKEN_SEPARADOR)
               tipo_audio = partes[0]
+              # F4: SINO e transicao curta — ignora Prev (deixa sino terminar)
+              if tipo_audio == "SINO":
+                  return {"version": "1.0", "response": {}}
               idx_atual = int(partes[1])
 
               # --- Musica: anterior da playlist ---
@@ -703,7 +1277,7 @@ def handle_playback_prev(event):
                       novo_token = f"{livro_base}{TOKEN_SEPARADOR}{novo_cap}"
                       if url:
                           _salvar_progresso(user_id, livro_base, novo_cap)
-                          return _build_audio(titulo, url, token=novo_token)
+                          return _build_audio(titulo, url, token=novo_token, total_capitulos=len(docs_livro))
       except Exception as e:
           logger.warning(f"Erro handle_playback_prev: {e}")
       return {"version": "1.0", "response": {}}
@@ -743,13 +1317,13 @@ def _menu_musicas(session):
           return _resp(
               "Musicas Caxinguele. As musicas estao sendo preparadas. "
               "Em breve estao disponiveis aqui. "
-              f"{NUM_VOLTAR} para voltar.",
+              "Diga voltar para o menu.",
               end=False, session=session)
       partes = [f"{m['numero']}. {m['titulo']}" for m in musicas]
       texto = (
           f"Musicas Caxinguele. {len(musicas)} musica{'s' if len(musicas) > 1 else ''} disponivel{'is' if len(musicas) > 1 else ''}. "
           f"{'. '.join(partes)}. "
-          f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar. "
+          "Diga repetir ou voltar. "
           "Qual numero quer ouvir?"
       )
       new_session = {
@@ -769,18 +1343,22 @@ def _menu_musicas(session):
 # Por enquanto todos os livros têm categoria="Livros", então ambas as categorias filtram por "Livros"
 # Futuramente: criar subcategorias no pipeline de upload (ex: "Livros: Inteligencia Sensorial")
 LIVROS_CATEGORIAS = [
-      {"numero": 1, "nome": "Inteligencia Sensorial", "filtro": "Livros"},
-      {"numero": 2, "nome": "Geral",                   "filtro": "Livros"},
+      {"numero": 1, "nome": "Geral", "filtro": "Livros"},
 ]
 
 
 def _menu_livros_categorias(session):
-      """Submenu de categorias de livros. Amigo escolhe categoria → lista de livros."""
+      """Submenu de categorias de livros. Se só 1 categoria, pula direto para lista."""
+      if len(LIVROS_CATEGORIAS) == 1:
+          cat = LIVROS_CATEGORIAS[0]
+          todos_docs = _obter_json(session, "todos_docs") or []
+          docs_livros = [d for d in todos_docs if d.get("categoria", "") == cat["filtro"]]
+          return _menu_livros(docs_livros, session, categoria_nome=cat["nome"])
       partes = [f"{cat['numero']} para Livros {cat['nome']}" for cat in LIVROS_CATEGORIAS]
       texto = (
           "Livros. Escolha a categoria. "
           f"{'. '.join(partes)}. "
-          f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar ao menu principal."
+          "Diga repetir ou voltar ao menu."
       )
       new_session = {
           **session,
@@ -791,35 +1369,21 @@ def _menu_livros_categorias(session):
 
 
 def _menu_livros(docs_brutos, session, categoria_nome=""):
-      """Lista livros únicos (agrupados por titulo base). Amigo escolhe → opcoes do livro."""
+      """Lista livros agrupados, paginados 5 por vez, ordenados por status (em progresso → nunca → ja lidos escondidos)."""
       livros = _agrupar_livros(docs_brutos)
       if not livros:
           return _resp(
               f"Nenhum livro catalogado em {categoria_nome}. "
-              f"{NUM_VOLTAR} para voltar.",
+              "Diga voltar para o menu.",
               end=False, session={**session, "nivel": "submenu", "menu_tipo": "livros_categorias"})
-
-      partes = []
-      for i, livro in enumerate(livros, 1):
-          n_caps = livro["total_capitulos"]
-          caps_txt = f"{n_caps} capitulos" if n_caps > 1 else "1 capitulo"
-          partes.append(f"{i}. {livro['titulo']}, {caps_txt}")
-
-      texto = (
-          f"Livros {categoria_nome}. "
-          f"Voce tem {len(livros)} livro{'s' if len(livros) > 1 else ''}. "
-          f"{'. '.join(partes)}. "
-          f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar. "
-          "Qual livro quer ouvir?"
-      )
       new_session = {
           **session,
-          "nivel":             "submenu",
-          "menu_tipo":         "livros",
           "livros_dados":      json.dumps(livros),
           "livros_categoria":  categoria_nome,
+          "pagina_livros":     "1",
+          "mostrar_ja_lidos":  "false",
       }
-      return _resp(texto, end=False, reprompt="Diga o numero do livro.", session=new_session)
+      return _render_pagina_livros(new_session, mostrar_ja_lidos=False)
 
 
 # ==================== MENU [9]: CONFIGURACOES — VOZES E VELOCIDADES ====================
@@ -839,7 +1403,7 @@ def _menu_config_vozes(session):
       texto = (
           "Escolher Voz de Hoje. "
           f"Ha {len(vozes)} opcoes de voz brasileira de qualidade. {'. '.join(partes)}. "
-          f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar."
+          "Diga repetir ou voltar."
       )
       return _resp(texto, end=False, reprompt="Diga o numero da voz.",
                     session={**session, "nivel": "submenu", "menu_tipo": "config_vozes"})
@@ -852,7 +1416,7 @@ def _menu_config_velocidades(session):
       texto = (
           "Velocidade da Fala. "
           f"Ha {len(velocidades)} opcoes. {'. '.join(partes)}. "
-          f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar."
+          "Diga repetir ou voltar."
       )
       return _resp(texto, end=False, reprompt="Diga o numero da velocidade.",
                     session={**session, "nivel": "submenu", "menu_tipo": "config_velocidades"})
@@ -872,8 +1436,7 @@ def _menu_favoritos(session):
       texto = (
           f"Favoritos Importantes. "
           f"Voce tem {len(sublistas)} categorias. {', '.join(partes)}. "
-          f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar ao menu principal. "
-          "Qual numero?"
+          "Diga repetir ou voltar. Qual numero?"
       )
       new_session = {
           **session,
@@ -906,7 +1469,7 @@ def _menu_calendario(session):
           f"Calendario e Compromissos. "
           f"Voce tem {len(compromissos)} compromisso{'s' if len(compromissos) > 1 else ''}. "
           f"{'. '.join(partes)}. "
-          f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar. "
+          "Diga repetir ou voltar. "
           "Qual compromisso quer ver?"
       )
       new_session = {
@@ -949,7 +1512,7 @@ def _menu_reunioes(session):
           f"Reunioes Caxinguele. "
           f"Voce tem {len(reunioes)} reunia{'o' if len(reunioes) == 1 else 'oes'} registrada{'s' if len(reunioes) > 1 else ''}. "
           f"{'. '.join(partes)}. "
-          f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar. "
+          "Diga repetir ou voltar. "
           "Qual reuniao quer ouvir?"
       )
       new_session = {
@@ -983,7 +1546,7 @@ def _menu_listas(session):
           f"Organizacoes da Mente em Listas. "
           f"Voce tem {len(nomes)} lista{'s' if len(nomes) > 1 else ''}. "
           f"{'. '.join(partes)}. "
-          f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar. "
+          "Diga repetir ou voltar. "
           "Qual lista?"
       )
       new_session = {
@@ -1012,8 +1575,8 @@ def _selecionar_submenu(numero, session):
           musica = next((m for m in musicas if m.get("numero") == numero), None)
           if not musica:
               return _resp(
-                  f"Numero invalido. Diga um numero entre 1 e {len(musicas)}. "
-                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+                  f"Esse numero nao existe. Temos {len(musicas)} musicas. Diga um numero entre 1 e {len(musicas)}. "
+                  "Diga repetir ou voltar.",
                   end=False, session=session)
           url = musica.get("url", "")
           titulo = musica.get("titulo", f"Musica {numero}")
@@ -1036,8 +1599,8 @@ def _selecionar_submenu(numero, session):
           cat = next((c for c in LIVROS_CATEGORIAS if c["numero"] == numero), None)
           if not cat:
               return _resp(
-                  f"Numero invalido. Escolha entre 1 e {len(LIVROS_CATEGORIAS)}. "
-                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+                  f"Esse numero nao existe. Escolha entre 1 e {len(LIVROS_CATEGORIAS)}. "
+                  "Diga repetir ou voltar.",
                   end=False, session=session)
           cat_nome = cat["nome"]
           cat_filtro = cat.get("filtro", cat_nome)
@@ -1047,43 +1610,45 @@ def _selecionar_submenu(numero, session):
 
       # ---------- Livros: amigo escolheu qual livro → mostra opcoes ----------
       if menu_tipo == "livros":
-          livros = _obter_json(session, "livros_dados") or []
+          # Lista NA ORDEM mostrada (em_progresso + nunca + opcionalmente ja_lidos)
+          visiveis = _livros_visiveis(session)
           if numero == NUM_REPETIR:
-              # Remonta lista de livros a partir dos docs originais
-              categoria_nome = session.get("livros_categoria", "")
-              todos_docs = _obter_json(session, "todos_docs") or []
-              cat_info = next((c for c in LIVROS_CATEGORIAS if c["nome"] == categoria_nome), None)
-              cat_filtro = cat_info["filtro"] if cat_info else "Livros"
-              docs_livros = [d for d in todos_docs if d.get("categoria","") == cat_filtro]
-              return _menu_livros(docs_livros, session, categoria_nome=categoria_nome)
+              # Re-renderiza a pagina atual (preserva paginacao + filtros)
+              mostrar = session.get("mostrar_ja_lidos") == "true"
+              return _render_pagina_livros(session, mostrar_ja_lidos=mostrar)
           if numero == NUM_VOLTAR:
+              if len(LIVROS_CATEGORIAS) <= 1:
+                  return _voltar_menu_principal(session)
               return _menu_livros_categorias(session)
-          if not (1 <= numero <= len(livros)):
+          if not (1 <= numero <= len(visiveis)):
               return _resp(
-                  f"Numero invalido. Ha {len(livros)} livros. Diga um numero entre 1 e {len(livros)}. "
-                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+                  f"Esse numero nao existe. Temos {len(visiveis)} livros visiveis. "
+                  f"Diga um numero entre 1 e {len(visiveis)}. Diga repetir ou voltar.",
                   end=False, session=session)
 
-          livro = livros[numero - 1]
+          livro = visiveis[numero - 1]
           titulo_livro = livro["titulo"]
           capitulos = livro.get("capitulos", [])
           livro_base = livro.get("livro_base", titulo_livro)
           n_caps = livro["total_capitulos"]
 
-          # Verifica progresso salvo no DynamoDB
+          # Verifica progresso salvo no DynamoDB (session ja tem schema dict)
           progresso = _obter_json(session, "progresso") or {}
-          cap_salvo = progresso.get(livro_base, None)
+          cap_data = progresso.get(livro_base, None)
+          cap_salvo = cap_data.get("cap_idx") if isinstance(cap_data, dict) else cap_data
           opcao_continuar = ""
           if cap_salvo is not None and cap_salvo > 0:
               opcao_continuar = f"2 para Continuar do Capitulo {cap_salvo + 1}. "
 
+          # Eco reforcado do numero + nome (confirmacao implicita pra cego validar acerto)
           texto = (
-              f"{titulo_livro}. {n_caps} capitulo{'s' if n_caps > 1 else ''}. "
-              "1 para Comecar do Inicio. "
-              f"{opcao_continuar}"
-              "3 para Escolher Capitulo. "
-              "4 para Sinopse. "
-              f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar."
+              f"Numero {numero}. {titulo_livro}. {n_caps} capitulo{'s' if n_caps > 1 else ''}. "
+              "Diga 1 para Comecar do Inicio. "
+              f"{('Diga ' + opcao_continuar) if opcao_continuar else ''}"
+              "Diga 3 para Escolher Capitulo. "
+              "Diga 4 para Sinopse. "
+              "Ou diga outro numero para outro livro. "
+              "Diga repetir ou voltar."
           )
           new_session = {
               **session,
@@ -1106,16 +1671,16 @@ def _selecionar_submenu(numero, session):
               partes = [f"{i}. {_titulo_curto(c.get('titulo', f'Cap {i}'))}" for i, c in enumerate(capitulos, 1)]
               return _resp(
                   f"{titulo_livro}. {'. '.join(partes)}. "
-                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+                  "Diga repetir ou voltar.",
                   end=False, session=session)
           if numero == NUM_VOLTAR:
               return _resp(
                   f"{titulo_livro}. 1 para Comecar do Inicio. 3 para Escolher Capitulo. 4 para Sinopse. "
-                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+                  "Diga repetir ou voltar.",
                   end=False, session={**session, "nivel": "item", "menu_tipo": "livros"})
           if not (1 <= numero <= len(capitulos)):
               return _resp(
-                  f"Numero invalido. Ha {len(capitulos)} capitulos. Diga um numero entre 1 e {len(capitulos)}.",
+                  f"Esse numero nao existe. Temos {len(capitulos)} capitulos. Diga um numero entre 1 e {len(capitulos)}.",
                   end=False, session=session)
           cap_idx = numero - 1
           cap = capitulos[cap_idx]
@@ -1125,7 +1690,7 @@ def _selecionar_submenu(numero, session):
               token = f"{livro_base}{TOKEN_SEPARADOR}{cap_idx}"
               new_session = {**session, "capitulo_atual": str(cap_idx)}
               _registrar_uso(cap_titulo, "play_livro_capitulo")
-              return _build_audio(cap_titulo, url, token=token, session_extra=new_session)
+              return _build_audio(cap_titulo, url, token=token, session_extra=new_session, total_capitulos=len(capitulos))
           return _resp(f"Capitulo {numero} sem audio disponivel.", end=False, session=session)
 
       # ---------- Calendario: amigo escolheu compromisso ----------
@@ -1133,7 +1698,7 @@ def _selecionar_submenu(numero, session):
           compromissos = _obter_json(session, "compromissos") or []
           if not (1 <= numero <= len(compromissos)):
               return _resp(
-                  f"Numero invalido. Ha {len(compromissos)} compromissos. Qual?",
+                  f"Esse numero nao existe. Ha {len(compromissos)} compromissos. Qual?",
                   end=False, session=session)
           comp = compromissos[numero - 1]
           texto = (
@@ -1143,7 +1708,7 @@ def _selecionar_submenu(numero, session):
               f"O que quer fazer? "
               f"1 para editar este compromisso. "
               f"2 para remover este compromisso. "
-              f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar."
+              "Diga repetir ou voltar."
           )
           new_session = {
               **session,
@@ -1163,8 +1728,8 @@ def _selecionar_submenu(numero, session):
               return _voltar_menu_principal(session)
           if not (1 <= numero <= len(reunioes)):
               return _resp(
-                  f"Numero invalido. Ha {len(reunioes)} reunioes. Diga um numero entre 1 e {len(reunioes)}. "
-                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+                  f"Esse numero nao existe. Ha {len(reunioes)} reunioes. Diga um numero entre 1 e {len(reunioes)}. "
+                  "Diga repetir ou voltar.",
                   end=False, session=session)
           reu = reunioes[numero - 1]
           data_reu = reu.get('data', '')
@@ -1175,7 +1740,7 @@ def _selecionar_submenu(numero, session):
               "1 para Resumo em Topicos Frasais. "
               "2 para Resumo Pragmatico. "
               "3 para Audio na Integra. "
-              f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar."
+              "Diga repetir ou voltar."
           )
           new_session = {
               **session,
@@ -1190,7 +1755,7 @@ def _selecionar_submenu(numero, session):
       if menu_tipo == "favoritos":
           sublistas = _obter_json(session, "sublistas") or []
           if not (1 <= numero <= len(sublistas)):
-              return _resp(f"Numero invalido. Ha {len(sublistas)} categorias. Qual?",
+              return _resp(f"Esse numero nao existe. Ha {len(sublistas)} categorias. Qual?",
                             end=False, session=session)
           sublista_nome = sublistas[numero - 1]
           favoritos = _buscar_favoritos()
@@ -1198,14 +1763,14 @@ def _selecionar_submenu(numero, session):
           if not itens:
               return _resp(
                   f"{sublista_nome}. Nenhum item favoritado nesta categoria. "
-                  f"{NUM_VOLTAR} para voltar.",
+                  "Diga voltar.",
                   end=False, session=session)
           partes = [f"{i}: {it.get('titulo', '?')}" for i, it in enumerate(itens, 1)]
           texto = (
               f"{sublista_nome}. {len(itens)} ite{'m' if len(itens) == 1 else 'ns'}. "
               f"{'. '.join(partes)}. "
               f"Diga o numero para ouvir detalhes e remover se quiser. "
-              f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar."
+              "Diga repetir ou voltar."
           )
           new_session = {
               **session,
@@ -1220,7 +1785,7 @@ def _selecionar_submenu(numero, session):
       if menu_tipo == "favoritos_itens":
           itens = _obter_json(session, "itens_favoritos") or []
           if not (1 <= numero <= len(itens)):
-              return _resp(f"Numero invalido. Ha {len(itens)} itens. Qual?",
+              return _resp(f"Esse numero nao existe. Ha {len(itens)} itens. Qual?",
                             end=False, session=session)
           item = itens[numero - 1]
           sublista_nome = session.get("sublista_nome", "")
@@ -1228,7 +1793,7 @@ def _selecionar_submenu(numero, session):
               f"Item {numero}: {item.get('titulo', '?')}. "
               f"Favoritado em {item.get('favoritado_em', '?')}. "
               f"1 para remover este item dos favoritos. "
-              f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar."
+              "Diga repetir ou voltar."
           )
           new_session = {
               **session,
@@ -1245,19 +1810,19 @@ def _selecionar_submenu(numero, session):
           nomes = _obter_json(session, "nomes_listas") or []
           listas = _obter_json(session, "listas") or {}
           if not (1 <= numero <= len(nomes)):
-              return _resp(f"Numero invalido. Ha {len(nomes)} listas. Qual?",
+              return _resp(f"Esse numero nao existe. Ha {len(nomes)} listas. Qual?",
                             end=False, session=session)
           nome_lista = nomes[numero - 1]
           itens = listas.get(nome_lista, [])
           if not itens:
-              return _resp(f"{nome_lista}. Lista vazia. {NUM_VOLTAR} para voltar.",
+              return _resp(f"{nome_lista}. Lista vazia. Diga voltar.",
                             end=False, session=session)
           partes = [f"{i}: {it.get('conteudo', '?')}" for i, it in enumerate(itens, 1)]
           texto = (
               f"Lista {nome_lista}. {len(itens)} ite{'m' if len(itens) == 1 else 'ns'}. "
               f"{'. '.join(partes)}. "
               f"Diga o numero para ouvir e editar. "
-              f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar."
+              "Diga repetir ou voltar."
           )
           new_session = {
               **session,
@@ -1272,7 +1837,7 @@ def _selecionar_submenu(numero, session):
       if menu_tipo == "listas_itens":
           itens = _obter_json(session, "itens_lista") or []
           if not (1 <= numero <= len(itens)):
-              return _resp(f"Numero invalido. Ha {len(itens)} itens. Qual?",
+              return _resp(f"Esse numero nao existe. Ha {len(itens)} itens. Qual?",
                             end=False, session=session)
           item = itens[numero - 1]
           nome_lista = session.get("nome_lista", "")
@@ -1281,7 +1846,7 @@ def _selecionar_submenu(numero, session):
               f"Adicionado em {item.get('adicionado_em', '?')}. "
               f"1 para remover este item. "
               f"2 para editar o conteudo. "
-              f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar."
+              "Diga repetir ou voltar."
           )
           new_session = {
               **session,
@@ -1297,7 +1862,7 @@ def _selecionar_submenu(numero, session):
       if menu_tipo == "documentos":
           docs = _obter_json(session, "docs_filtrados") or []
           if not (1 <= numero <= len(docs)):
-              return _resp(f"Numero invalido. Ha {len(docs)} documentos. Qual?",
+              return _resp(f"Esse numero nao existe. Ha {len(docs)} documentos. Qual?",
                             end=False, session=session)
           doc = docs[numero - 1]
           titulo = _titulo_curto(doc.get("titulo", "Sem titulo"))
@@ -1305,7 +1870,8 @@ def _selecionar_submenu(numero, session):
           if url:
               _registrar_uso(titulo, "play")
               return _build_audio(titulo, url)
-          return _resp(f"{titulo} nao tem audio disponivel.", end=True)
+          return _resp(f"{titulo} nao tem audio disponivel. Escolha outro ou diga voltar.",
+                        end=False, session=session)
 
       # ---------- YouTube: submenu ----------
       if menu_tipo == "youtube":
@@ -1313,7 +1879,7 @@ def _selecionar_submenu(numero, session):
               return _resp(
                   "YouTube e Videos. 1 para Ultimas Atualizacoes YT. "
                   "2 para Pesquisar no YouTube. 3 para Meus Canais. "
-                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+                  "Diga repetir ou voltar.",
                   end=False, session=session)
           if numero == NUM_VOLTAR:
               return _voltar_menu_principal(session)
@@ -1332,7 +1898,7 @@ def _selecionar_submenu(numero, session):
                   "Meus Canais ainda nao disponivel. "
                   "Diga outro numero ou diga voltar.",
                   end=False, session=session)
-          return _resp("Opcao invalida. 1 para Atualizacoes. 2 para Pesquisar. 3 para Canais.",
+          return _resp("Essa opcao nao existe. 1 para Atualizacoes. 2 para Pesquisar. 3 para Canais.",
                         end=False, session=session)
 
       # ---------- Configuracoes: submenu principal ----------
@@ -1340,7 +1906,7 @@ def _selecionar_submenu(numero, session):
           if numero == NUM_REPETIR:
               return _resp(
                   "Configuracoes. 1 para Velocidade da Fala. 2 para Guia do Usuario. "
-                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+                  "Diga repetir ou voltar.",
                   end=False, session=session)
           if numero == NUM_VOLTAR:
               return _voltar_nivel_anterior(session)
@@ -1348,10 +1914,10 @@ def _selecionar_submenu(numero, session):
               return _menu_config_velocidades(session)
           if numero == 2:
               return _resp(
-                  "Guia do Usuario. Voce pode ouvir o menu de ajuda dizendo: Alexa, pede ajuda na super alexa. "
-                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+                  "Guia do Usuario. Voce pode ouvir o menu de ajuda dizendo: Alexa, ajuda. "
+                  "Diga repetir ou voltar.",
                   end=False, session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
-          return _resp("Opcao invalida. 1 para Velocidade. 2 para Guia.",
+          return _resp("Essa opcao nao existe. 1 para Velocidade. 2 para Guia.",
                         end=False, session=session)
 
       # ---------- Configuracoes: escolher velocidade ----------
@@ -1361,12 +1927,12 @@ def _selecionar_submenu(numero, session):
           if numero == NUM_VOLTAR:
               return _resp(
                   "Configuracoes. 1 para Velocidade da Fala. 2 para Guia do Usuario. "
-                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+                  "Diga repetir ou voltar.",
                   end=False, session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
           velocidades_nomes  = ["Muito Devagar", "Devagar", "Normal", "Rapido", "Muito Rapido"]
           velocidades_chaves = ["muito_devagar", "devagar", "normal", "rapido", "muito_rapido"]
           if not (1 <= numero <= len(velocidades_nomes)):
-              return _resp(f"Opcao invalida. Escolha entre 1 e {len(velocidades_nomes)}.",
+              return _resp(f"Essa opcao nao existe. Escolha entre 1 e {len(velocidades_nomes)}.",
                             end=False, session=session)
           vel_nome  = velocidades_nomes[numero - 1]
           vel_chave = velocidades_chaves[numero - 1]
@@ -1376,7 +1942,7 @@ def _selecionar_submenu(numero, session):
               f"Velocidade {vel_nome} ativada para esta sessao. "
               "Os menus e textos serao falados nessa velocidade. "
               "Para audiobooks gravados (MP3), a velocidade nao pode ser alterada em tempo real. "
-              f"{NUM_VOLTAR} para voltar.",
+              "Diga voltar.",
               end=False, session=new_session)
 
       # Fallback
@@ -1397,18 +1963,24 @@ def _selecionar_acao_item(numero, session):
           capitulos = _obter_json(session, "capitulos_livro") or []
           user_id = session.get("user_id", "")
           progresso = _obter_json(session, "progresso") or {}
-          cap_salvo = progresso.get(livro_base, None)
+          cap_data = progresso.get(livro_base, None)
+          cap_salvo = cap_data.get("cap_idx") if isinstance(cap_data, dict) else cap_data
+          offset_salvo = cap_data.get("offset_ms", 0) if isinstance(cap_data, dict) else 0
 
           if numero == NUM_REPETIR:
-              opcao_continuar = f"2 para Continuar do Capitulo {cap_salvo + 1}. " if cap_salvo else ""
+              opcao_continuar = f"2 para Continuar do Capitulo {cap_salvo + 1}. " if (cap_salvo is not None and cap_salvo > 0) else ""
               return _resp(
                   f"{titulo}. 1 para Comecar do Inicio. {opcao_continuar}"
                   "3 para Escolher Capitulo. 4 para Sinopse. "
-                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+                  "Diga repetir ou voltar.",
                   end=False, session=session)
 
           if numero == NUM_VOLTAR:
-              # Volta para lista de livros da mesma categoria
+              # Volta para lista de livros PRESERVANDO pagina atual (fix F1)
+              if _obter_json(session, "livros_dados"):
+                  mostrar = session.get("mostrar_ja_lidos") == "true"
+                  return _render_pagina_livros(session, mostrar_ja_lidos=mostrar)
+              # Fallback: remonta do zero se livros_dados perdido
               categoria_nome = session.get("livros_categoria", "")
               todos_docs = _obter_json(session, "todos_docs") or []
               cat_info = next((c for c in LIVROS_CATEGORIAS if c["nome"] == categoria_nome), None)
@@ -1426,11 +1998,11 @@ def _selecionar_acao_item(numero, session):
                       _registrar_uso(titulo, "play_livro_inicio")
                       token = f"{livro_base}{TOKEN_SEPARADOR}0"
                       new_session = {**session, "capitulo_atual": "0"}
-                      return _build_audio(cap_titulo, url, token=token, session_extra=new_session)
+                      return _build_audio(cap_titulo, url, token=token, session_extra=new_session, total_capitulos=len(capitulos))
               return _resp(f"{titulo} nao tem audio disponivel.", end=False, session=session)
 
           if numero == 2:
-              # Continuar do capitulo salvo
+              # Continuar do capitulo salvo, no offset salvo (rebobinado REWIND_MS)
               if cap_salvo is not None and capitulos and cap_salvo < len(capitulos):
                   cap = capitulos[cap_salvo]
                   url = cap.get("url_audio", "")
@@ -1439,10 +2011,16 @@ def _selecionar_acao_item(numero, session):
                       _registrar_uso(titulo, "play_livro_continuar")
                       token = f"{livro_base}{TOKEN_SEPARADOR}{cap_salvo}"
                       new_session = {**session, "capitulo_atual": str(cap_salvo)}
-                      return _build_audio(cap_titulo, url, token=token, session_extra=new_session)
+                      offset_resume = max(0, int(offset_salvo) - REWIND_MS)
+                      return _build_audio(
+                          cap_titulo, url,
+                          token=token, session_extra=new_session,
+                          total_capitulos=len(capitulos),
+                          offset_ms=offset_resume,
+                      )
               return _resp(
                   f"Nenhum progresso salvo para {titulo}. Diga 1 para comecar do inicio. "
-                  f"{NUM_VOLTAR} para voltar.",
+                  "Diga voltar.",
                   end=False, session=session)
 
           if numero == 3:
@@ -1453,7 +2031,7 @@ def _selecionar_acao_item(numero, session):
               texto = (
                   f"{titulo}. {len(capitulos)} capitulos. "
                   f"{'. '.join(partes)}. "
-                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar. "
+                  "Diga repetir ou voltar. "
                   "Qual capitulo quer ouvir?"
               )
               return _resp(texto, end=False,
@@ -1468,12 +2046,18 @@ def _selecionar_acao_item(numero, session):
               return _resp(
                   f"Sinopse de {titulo}. {sinopse}. "
                   "1 para Comecar a Ler. "
-                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+                  "Diga repetir ou voltar.",
                   end=False, session=session)
 
+          # Numero >= 5 dentro do submenu Livros = troca de livro (eco prometeu essa opcao)
+          if numero >= 5:
+              new_session = {**session, "nivel": "submenu"}
+              return _selecionar_submenu(numero, new_session)
+
           return _resp(
-              "Opcao invalida. 1 para inicio. 2 para continuar. 3 para capitulos. 4 para sinopse. "
-              f"{NUM_VOLTAR} para voltar.",
+              "Essa opcao nao existe. 1 para inicio. 2 para continuar. 3 para capitulos. 4 para sinopse. "
+              "Ou diga outro numero a partir de 5 para escolher outro livro. "
+              "Diga voltar.",
               end=False, session=session)
 
       # ---------- Calendario: editar ou remover compromisso ----------
@@ -1484,7 +2068,7 @@ def _selecionar_acao_item(numero, session):
               texto = (
                   f"Editar compromisso: {comp.get('titulo', '?')}. "
                   f"Qual campo? 1 para titulo. 2 para data. 3 para hora. 4 para descricao. "
-                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar."
+                  "Diga repetir ou voltar."
               )
               return _resp(texto, end=False,
                             session={**session, "nivel": "editar", "menu_tipo": "calendario_editar"})
@@ -1495,7 +2079,7 @@ def _selecionar_acao_item(numero, session):
                   "Diga outro numero ou diga voltar.",
                   end=False,
                   session={**session, "nivel": "menu", "acao_pendente": "remover_compromisso"})
-          return _resp("Opcao invalida. 1 para editar. 2 para remover.",
+          return _resp("Essa opcao nao existe. 1 para editar. 2 para remover.",
                         end=False, session=session)
 
       # ---------- Reunioes: modo de escuta ----------
@@ -1508,7 +2092,7 @@ def _selecionar_acao_item(numero, session):
                   "1 para Resumo em Topicos Frasais. "
                   "2 para Resumo Pragmatico. "
                   "3 para Audio na Integra. "
-                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+                  "Diga repetir ou voltar.",
                   end=False, session=session)
           if numero == NUM_VOLTAR:
               return _menu_reunioes(session)
@@ -1516,29 +2100,29 @@ def _selecionar_acao_item(numero, session):
               resumo = reu.get("resumo", "Sem resumo disponivel.")
               return _resp(
                   f"Resumo em topicos frasais da reuniao {titulo_reu}. {resumo}. "
-                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+                  "Diga repetir ou voltar.",
                   end=False, session={**session, "nivel": "item", "menu_tipo": "reunioes"})
           if numero == 2:
               resumo = reu.get("resumo", "Sem resumo disponivel.")
               return _resp(
                   f"Resumo pragmatico da reuniao {titulo_reu}. {resumo}. "
-                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+                  "Diga repetir ou voltar.",
                   end=False, session={**session, "nivel": "item", "menu_tipo": "reunioes"})
           if numero == 3:
               transcricao = reu.get("transcricao", "")
               if transcricao:
                   return _resp(
                       f"Audio na integra da reuniao {titulo_reu}. {transcricao[:3000]}. "
-                      f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+                      "Diga repetir ou voltar.",
                       end=False, session={**session, "nivel": "item", "menu_tipo": "reunioes"})
               return _resp(
                   f"Transcricao nao disponivel para {titulo_reu}. "
                   "1 para topicos frasais. 2 para resumo pragmatico. "
-                  f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+                  "Diga repetir ou voltar.",
                   end=False, session=session)
           return _resp(
-              "Opcao invalida. 1 para topicos frasais. 2 para resumo pragmatico. 3 para audio na integra. "
-              f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+              "Essa opcao nao existe. 1 para topicos frasais. 2 para resumo pragmatico. 3 para audio na integra. "
+              "Diga repetir ou voltar.",
               end=False, session=session)
 
       # ---------- Favoritos: remover ----------
@@ -1547,10 +2131,10 @@ def _selecionar_acao_item(numero, session):
               item = _obter_json(session, "item_dados") or {}
               return _resp(
                   f"Item '{item.get('titulo', '?')}' removido dos favoritos. "
-                  f"{NUM_VOLTAR} para voltar.",
+                  "Diga voltar.",
                   end=False,
                   session={**session, "nivel": "menu", "acao_pendente": "remover_favorito"})
-          return _resp("1 para remover. " + f"{NUM_VOLTAR} para voltar.",
+          return _resp("1 para remover. Ou diga voltar.",
                         end=False, session=session)
 
       # ---------- Listas: remover ou editar ----------
@@ -1559,13 +2143,13 @@ def _selecionar_acao_item(numero, session):
               item = _obter_json(session, "item_dados") or {}
               return _resp(
                   f"Item '{item.get('conteudo', '?')}' removido da lista. "
-                  f"{NUM_VOLTAR} para voltar.",
+                  "Diga voltar.",
                   end=False,
                   session={**session, "nivel": "menu", "acao_pendente": "remover_lista_item"})
           if numero == 2:
               return _resp(
                   "Para editar um item, use o aplicativo no celular por enquanto. "
-                  f"{NUM_VOLTAR} para voltar.",
+                  "Diga voltar.",
                   end=False, session={**session, "nivel": "menu"})
           return _resp("1 para remover. 2 para editar.", end=False, session=session)
 
@@ -1588,7 +2172,7 @@ def _selecionar_campo_editar(numero, session):
           return _resp(
               f"Para alterar o {campo} do compromisso, use o aplicativo no celular. "
               "A edicao por voz para texto livre sera adicionada em breve. "
-              f"{NUM_VOLTAR} para voltar.",
+              "Diga voltar.",
               end=False, session={**session, "nivel": "menu"})
 
       return _resp("Nao entendi.", end=False, session={**session, "nivel": "menu"})
@@ -1641,7 +2225,7 @@ def _voltar_menu_principal(session):
 _PARENT_MENU = {
     "musicas":             None,
     "livros_categorias":   None,
-    "livros":              "livros_categorias",
+    "livros":              None if len(LIVROS_CATEGORIAS) <= 1 else "livros_categorias",
     "livros_capitulos":    "livros",
     "configuracoes":       None,
     "config_vozes":        "configuracoes",
@@ -1674,7 +2258,7 @@ def _reconstruir_menu(menu_tipo, session):
       if menu_tipo == "configuracoes":
           return _resp(
               "Configuracoes. 1 para Velocidade da Fala. 2 para Guia do Usuario. "
-              f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar.",
+              "Diga repetir ou voltar.",
               end=False,
               session={**session, "nivel": "submenu", "menu_tipo": "configuracoes"})
       if menu_tipo == "config_velocidades":
@@ -1724,7 +2308,7 @@ def _listar_docs_como_submenu(docs, nome_cat, session):
       texto = (
           f"{nome_cat}. {len(docs)} documento{'s' if len(docs) > 1 else ''}. "
           f"{'. '.join(partes)}. "
-          f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para voltar. "
+          "Diga repetir ou voltar. "
           "Qual numero?"
       )
       new_session = {
@@ -1784,16 +2368,21 @@ def _handle_ler_documento(slots, session):
       url = doc.get("url_audio", "")
       if url:
           return _build_audio(titulo, url)
-      return _resp(f"{titulo} sem audio.", end=True)
+      return _resp(f"{titulo} sem audio. Escolha outro ou diga voltar.", end=False, session=session)
 
 
 def _handle_ajuda(session):
-      return _resp(
-          "Para navegar: diga o numero do menu. "
-          "Dentro de cada menu, diga o numero da opcao. "
-          f"A qualquer momento, diga {NUM_REPETIR} para repetir ou {NUM_VOLTAR} para voltar. "
-          "Diga voltar para ir ao menu principal.",
-          end=False, session=session)
+      """P2f (S246): ajuda contextual — re-apresenta o menu/lista do estado atual.
+      Cobre 11 estados via _reconstruir_menu. Buracos conhecidos (arestas futuras):
+      nivel=item livros (livro selecionado), livros_capitulos, nivel=item reunioes.
+      """
+      menu_tipo = session.get("menu_tipo", "")
+      nivel = session.get("nivel", "menu")
+      # Estado raiz: menu principal
+      if nivel == "menu" or not menu_tipo:
+          return _voltar_menu_principal(session)
+      # Demais estados: re-renderiza o menu/lista atual
+      return _reconstruir_menu(menu_tipo, session)
 
 
 # ==================== BUSCA DE DADOS ====================
@@ -1959,8 +2548,7 @@ def _enumerar_menu_principal(menu, documentos):
           return "Sua biblioteca esta vazia."
       return (
           f"Voce tem {len(partes)} opcoes. {', '.join(partes)}. "
-          f"{NUM_REPETIR} para repetir. {NUM_VOLTAR} para sair. "
-          "Qual numero?"
+          "Diga repetir ou voltar. Qual numero?"
       )
 
 
@@ -2103,17 +2691,27 @@ def _resp(text, end=True, reprompt=None, session=None):
       return response
 
 
-def _build_audio(titulo, url_audio, token=None, session_extra=None):
+def _build_audio(titulo, url_audio, token=None, session_extra=None, total_capitulos=None, offset_ms=0):
       """Reproduz um MP3 via AudioPlayer.
       token: identificador do audio, usado para pular capitulos (livro_base|||cap_idx)
       session_extra: atributos de sessao a preservar (obs: Alexa encerra sessao durante audio)
+      total_capitulos: se informado, anuncia "Capitulo X de Y" (evita HTTP extra)
+      offset_ms: posicao em ms onde comecar (default 0). Usado pelo ResumeIntent.
       """
       _registrar_uso(titulo, "play")
       audio_token = token or titulo
+      fala = f"Reproduzindo {titulo}"
+      if total_capitulos and token and TOKEN_SEPARADOR in token:
+          try:
+              cap_idx = int(token.split(TOKEN_SEPARADOR)[1])
+              fala = f"Capitulo {cap_idx + 1} de {total_capitulos}. {titulo}"
+          except Exception:
+              pass
+      # Resposta completa: metadata (display Echo Show) + sessionAttributes (Resume entre capitulos)
       resposta = {
           "version": "1.0",
           "response": {
-              "outputSpeech": {"type": "PlainText", "text": f"Reproduzindo {titulo}"},
+              "outputSpeech": {"type": "PlainText", "text": fala},
               "directives": [{
                   "type": "AudioPlayer.Play",
                   "playBehavior": "REPLACE_ALL",
@@ -2121,11 +2719,11 @@ def _build_audio(titulo, url_audio, token=None, session_extra=None):
                       "stream": {
                           "url": url_audio,
                           "token": audio_token,
-                          "offsetInMilliseconds": 0,
+                          "offsetInMilliseconds": int(offset_ms),
                       },
                       "metadata": {
                           "title": titulo,
-                          "subtitle": "Super Alexa — Caxinguele",
+                          "subtitle": "Caxinguele Audiobooks",
                       }
                   }
               }],

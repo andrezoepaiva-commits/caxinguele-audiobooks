@@ -138,6 +138,98 @@
           ]
         },
         {
+          "name": "PaginaProximaIntent",
+          "slots": [],
+          "samples": [
+            "proxima",
+            "proximo",
+            "proxima pagina",
+            "mais",
+            "avancar",
+            "continuar lista",
+            "mais livros",
+            "ver mais",
+            "tem mais",
+            "seguinte",
+            "passa",
+            "vai pra frente",
+            "manda mais",
+            "continua"
+          ]
+        },
+        {
+          "name": "PaginaAnteriorIntent",
+          "slots": [],
+          "samples": [
+            "anterior",
+            "pagina anterior",
+            "atras",
+            "recuar",
+            "livros anteriores",
+            "anteriores",
+            "antes",
+            "volta um",
+            "volta a pagina",
+            "volta uma",
+            "pagina antes",
+            "retorna"
+          ]
+        },
+        {
+          "name": "MostrarOuvidosIntent",
+          "slots": [],
+          "samples": [
+            "ouvidos",
+            "ja ouvi",
+            "ja ouvidos",
+            "completos",
+            "terminados",
+            "lidos",
+            "ja lidos",
+            "livros completos",
+            "livros terminados",
+            "ja escutados",
+            "que ja escutei",
+            "ja terminei",
+            "mostra os ouvidos"
+          ]
+        },
+        {
+          "name": "EsquecerLivroIntent",
+          "slots": [
+            {
+              "name": "numero",
+              "type": "AMAZON.NUMBER"
+            }
+          ],
+          "samples": [
+            "esquecer {numero}",
+            "esquecer numero {numero}",
+            "esquece {numero}",
+            "esquecer o {numero}",
+            "remove {numero}",
+            "remover {numero}",
+            "remover livro {numero}",
+            "tira {numero}",
+            "tirar {numero}",
+            "apaga {numero}",
+            "apagar {numero}",
+            "deleta {numero}",
+            "esconde {numero}",
+            "abandonar {numero}",
+            "esquecer",
+            "esquece",
+            "esquecer livro",
+            "esquecer um",
+            "esquecer um livro",
+            "remover",
+            "remover livro",
+            "tira um",
+            "apaga um",
+            "abandonar"
+          ]
+        },
+        {
           "name": "AMAZON.HelpIntent",
           "samples": []
         },
@@ -151,6 +243,10 @@
         },
         {
           "name": "AMAZON.NavigateHomeIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.FallbackIntent",
           "samples": []
         }
       ],
