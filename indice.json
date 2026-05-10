@@ -328,13 +328,13 @@
       },
       {
         "numero": 8,
-        "nome": "Configurações",
-        "tipo": "configuracoes"
+        "nome": "Organizações da Mente em Listas",
+        "tipo": "listas_mentais"
       },
       {
         "numero": 9,
-        "nome": "Organizações da Mente em Listas",
-        "tipo": "listas_mentais"
+        "nome": "Configurações",
+        "tipo": "configuracoes"
       }
     ]
   }

@@ -120,12 +120,8 @@ def handle_launch(event):
           # Extrai o numero real do menu "Livros" (pode mudar entre deploys via indice.json)
           livros_num = next((m["numero"] for m in menu if m.get("nome", "").lower() == "livros"), 2)
           prefixo_onboarding = (
-              "Bem vindo ao Caxinguele Audiobooks. "
-              "Aqui estao seus audiolivros. "
-              f"Voce navega falando numeros. Por exemplo, diga {livros_num} para Livros, depois o numero do livro, depois 1 para comecar do inicio. "
-              "A qualquer hora, diga pausa para parar. Diga continuar para retomar de onde parou. "
-              "Diga ajuda quando quiser ouvir todos os comandos. "
-              "Vamos comecar. "
+              "Bem vindo aos seus Audiobooks. "
+              "Diga ajuda a qualquer hora. "
           )
           _salvar_flag(user_id, "onboarding_feito", True)
           session["onboarding_feito"] = "true"
@@ -153,7 +149,8 @@ def handle_launch(event):
       texto = prefixo_onboarding + prefixo_retomar + texto_menu
 
       _registrar_uso("_abertura", "launch", len(documentos))
-      reprompt = "Diga continuar ou o numero do menu." if progresso else "Diga o numero do menu."
+      # Reprompt = menu inteiro: se silencio (~8s), Alexa repete todas opcoes automaticamente
+      reprompt = ("Diga continuar para retomar, ou escolha. " + texto_menu) if progresso else texto_menu
       return _resp(texto, end=False, reprompt=reprompt, session=session)
 
 
@@ -227,7 +224,7 @@ def handle_intent(event):
               return _resp(
                   "Nao consegui retomar. Diga o numero do menu ou diga ajuda.",
                   end=False, session=session)
-      if intent_name == "AMAZON.HelpIntent":
+      if intent_name in ("AMAZON.HelpIntent", "OpcoesIntent"):
           return _handle_ajuda(session)
       if intent_name in ("ListarDocumentosIntent", "AMAZON.NavigateHomeIntent"):
           return _voltar_nivel_anterior(session)

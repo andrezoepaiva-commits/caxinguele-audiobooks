@@ -234,6 +234,24 @@
           "samples": []
         },
         {
+          "name": "OpcoesIntent",
+          "slots": [],
+          "samples": [
+            "opcoes",
+            "opções",
+            "que opcoes tenho",
+            "quais opções",
+            "quais opcoes",
+            "o que posso falar",
+            "o que tem aqui",
+            "o que eu posso fazer",
+            "minhas opcoes",
+            "minhas opções",
+            "onde estou",
+            "me lembre as opcoes"
+          ]
+        },
+        {
           "name": "AMAZON.StopIntent",
           "samples": []
         },
