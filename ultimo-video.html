@@ -9,18 +9,31 @@
 <title>Caxinguele - Abrindo video</title>
 </head>
 <body style="font-family: sans-serif; padding: 20px; text-align: center; max-width: 600px; margin: 0 auto;">
-<h1 id="msg">Abrindo no app YouTube em <span id="cnt">3</span>s...</h1>
-<p><a href="intent://www.youtube.com/watch?v=jNQXAC9IVRw#Intent;package=com.google.android.youtube;scheme=https;end" id="link" style="font-size: 24px; display: inline-block; padding: 15px; background: #ff0000; color: white; text-decoration: none; border-radius: 8px; margin: 10px;">Tocar pra abrir agora</a></p>
+<h1 id="msg">Buscando ultimo video...</h1>
+<p><a href="#" id="link" style="font-size: 24px; display: inline-block; padding: 15px; background: #ff0000; color: white; text-decoration: none; border-radius: 8px; margin: 10px; visibility: hidden;">Tocar pra abrir agora</a></p>
 <hr style="margin: 30px 0;">
 <p style="color: #666; font-size: 14px;">So pra configuracao:</p>
 <p><button id="stop" style="font-size: 16px; padding: 12px 20px; background: #f0f0f0; border: 1px solid #999; border-radius: 6px;">PARAR redirect (modo configuracao do atalho)</button></p>
 <script>
+const JSON_URL = "https://caxinguele-yt-shortcut-608040299978.s3.us-east-1.amazonaws.com/ultimo-video.json?t=" + Date.now();
 let segundos = 3;
 let timer;
 let parado = false;
-const VIDEO_ID = "jNQXAC9IVRw";
-const INTENT_URL = "intent://www.youtube.com/watch?v=" + VIDEO_ID + "#Intent;package=com.google.android.youtube;scheme=https;end";
-const FALLBACK_URL = "https://www.youtube.com/watch?v=" + VIDEO_ID;
+let videoId = null;
+
+function buildIntentUrl(vid) {
+  return "intent://www.youtube.com/watch?v=" + vid + "#Intent;package=com.google.android.youtube;scheme=https;end";
+}
+function buildFallbackUrl(vid) {
+  return "https://www.youtube.com/watch?v=" + vid;
+}
+
+function startCountdown() {
+  document.getElementById('msg').innerHTML = 'Abrindo no app YouTube em <span id="cnt">3</span>s...';
+  document.getElementById('link').href = buildIntentUrl(videoId);
+  document.getElementById('link').style.visibility = 'visible';
+  timer = setTimeout(tick, 1000);
+}
 
 function tick() {
   if (parado) return;
@@ -28,11 +41,9 @@ function tick() {
   var el = document.getElementById('cnt');
   if (el) el.innerText = segundos;
   if (segundos <= 0) {
-    // Tenta abrir no app YouTube via Android Intent
-    window.location.href = INTENT_URL;
-    // Fallback pra web YouTube se app nao abrir em 2.5s
+    window.location.href = buildIntentUrl(videoId);
     setTimeout(function() {
-      window.location.href = FALLBACK_URL;
+      window.location.href = buildFallbackUrl(videoId);
     }, 2500);
   } else {
     timer = setTimeout(tick, 1000);
@@ -46,7 +57,18 @@ document.getElementById('stop').addEventListener('click', function() {
   this.style.display = 'none';
 });
 
-timer = setTimeout(tick, 1000);
+// Fetch do ultimo video ID
+fetch(JSON_URL)
+  .then(r => r.json())
+  .then(data => {
+    videoId = data.video_id;
+    if (!videoId) throw new Error("video_id vazio");
+    startCountdown();
+  })
+  .catch(err => {
+    document.getElementById('msg').innerHTML = 'Erro buscando video.<br>Detalhe: ' + err.message;
+    console.error(err);
+  });
 </script>
 </body>
 </html>
