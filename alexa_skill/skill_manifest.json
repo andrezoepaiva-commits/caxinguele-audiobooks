@@ -5,12 +5,12 @@
         "pt-BR": {
           "name": "Meus Audiobooks",
           "summary": "Biblioteca de audiobooks acessivel por voz",
-          "description": "Acesse seus livros, artigos e emails convertidos em audio. Diga seus pedidos e confirme com CAMBIO.",
+          "description": "Acesse seus livros, artigos e emails convertidos em audio. Navegue pelos menus dizendo o numero da opcao.",
           "keywords": ["audiobook", "leitura", "acessibilidade", "livros"],
           "examplePhrases": [
             "Alexa, abre meus audiobooks",
-            "quais documentos tenho cambio",
-            "le o livro numero um cambio"
+            "quais documentos tenho",
+            "le o livro numero um"
           ]
         }
       },

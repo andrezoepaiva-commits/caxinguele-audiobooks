@@ -1,125 +1,105 @@
-# Guia de Operacao da Biblioteca de Audio
+# Guia de Uso — Super Alexa
 
 ## Introducao
 
-Bem-vindo ao seu guia de operacao da biblioteca de audio.
-Este guia tem tudo que voce precisa para usar seus audiobooks na Alexa.
-Sao cerca de dez minutos e voce saira operando tudo com maestria.
+Bem-vindo ao guia da Super Alexa, sua biblioteca pessoal de audio.
+Aqui voce vai aprender tudo que precisa para usar sozinho.
+Sao poucos minutos e voce sai operando tudo.
 Pode ouvir este guia a qualquer hora, quantas vezes quiser.
 
-## Secao 1: Como Funciona o Cambio
-
-Quando voce faz um pedido longo para a Alexa, termine sempre
-com a palavra CAMBIO. Isso diz para ela: terminei de falar,
-pode processar agora.
-
-Exemplos com cambio:
-
-Quais documentos eu tenho, cambio.
-
-Le o livro numero dois, cambio.
-
-Favorite o documento que estou ouvindo, cambio.
-
-Mostra meus favoritos, cambio.
-
-Agora, comandos sem cambio. Esses sao curtos e imediatos:
-
-Para. Isso pausa imediatamente.
-
-Continua. Isso retoma de onde parou.
-
-Proximo. Vai para o proximo documento.
-
-Anterior. Volta ao documento anterior.
-
-Repete. Ouve o trecho atual de novo.
-
-A regra e simples: se o comando tem uma so palavra, sem cambio.
-Se voce esta fazendo uma pergunta ou pedido maior, use cambio no final.
-
-## Secao 2: Abrir a Biblioteca
+## Secao 1: Como Abrir
 
 Para comecar, diga:
-Alexa, abre meus audiobooks.
+Alexa, abrir meus audiobooks.
 
-A Alexa responde: Ouvindo, pode falar.
+Se voce ja estava ouvindo um livro antes, a Alexa vai lembrar e perguntar se quer continuar.
+Diga continuar para retomar de onde parou.
+Ou escolha um numero do menu para ir a outra secao.
 
-Ai voce faz seu pedido e termina com cambio.
+## Secao 2: O Menu Principal
 
-## Secao 3: Comandos do Dia a Dia
+Ao abrir, voce ouve as opcoes disponiveis, cada uma com um numero.
+Os menus sao:
 
-Quais documentos tenho, cambio.
-A Alexa lista tudo que esta disponivel.
+Zero para Organizacoes Mentais, onde voce grava e ouve suas anotacoes de voz.
+Um para Ultimas Atualizacoes, que mostra os documentos adicionados recentemente.
+Dois para Livros, que e a sua biblioteca de audiobooks.
+Tres para Favoritos Importantes, com os itens que voce marcou como favorito.
+Quatro para Musica.
+Cinco para Calendario e Compromissos.
+Seis para Reunioes Caxinguele.
+Sete para Organizacoes da Mente em Listas, que sao suas listas pessoais.
+Oito para Configuracoes, onde voce ajusta velocidade e outras preferencias.
 
-Le o documento novo, cambio.
-Abre o documento mais recente.
+Diga o numero da opcao que voce quer. Por exemplo: dois.
+Depois de algumas vezes usando, voce ja vai saber os numeros de cor e pode ir direto, sem esperar a lista toda.
 
-Le livro numero dois, cambio.
-Abre o segundo livro da lista.
+## Secao 3: Dentro de Cada Menu
 
-Le artigos de hoje, cambio.
-Mostra so as noticias do dia.
+Dentro de qualquer menu, voce tambem navega por numeros.
+A Alexa lista as opcoes e voce diz o numero.
 
-Quanto tempo tem este documento, cambio.
-A Alexa fala a duracao estimada.
+Para ouvir as opcoes de novo, diga: repetir.
+Para voltar ao menu anterior, diga: voltar.
 
-## Secao 4: Favoritos
+Essas duas palavras funcionam em qualquer lugar: repetir e voltar.
 
-Favorite este, cambio.
-Marca o documento atual como favorito.
+## Secao 4: Ouvindo Livros
 
-Mostra meus favoritos, cambio.
-Lista todos os documentos marcados como favorito.
+Quando voce entra em Livros, a Alexa mostra os livros disponiveis.
+Diga o numero do livro que quer ouvir.
 
-Le favorito numero um, cambio.
-Abre o primeiro favorito da lista.
+Dentro do livro, voce tem opcoes como:
+Ouvir do inicio.
+Continuar de onde parou.
+Ver a lista de capitulos.
+Ouvir a sinopse.
 
-Remove dos favoritos, cambio.
-Desmarca o documento atual.
+Diga o numero da opcao.
 
-## Secao 5: Navegacao Durante a Leitura
+A Alexa lembra em que capitulo voce parou. Se voce fechar e abrir de novo outro dia, ela oferece continuar de onde estava.
 
-Durante a leitura de um documento, voce pode usar estes comandos curtos:
+Quando um capitulo termina, o proximo comeca automaticamente. Voce nao precisa fazer nada.
 
-Para. Pausa a leitura.
+A Alexa tambem avisa em qual capitulo voce esta. Por exemplo: Capitulo 3 de 12.
 
-Continua. Retoma de onde parou.
+## Secao 5: Comandos Durante a Reproducao
 
-Repete. Ouve o trecho atual de novo.
+Enquanto ouve um audio, voce pode usar estes comandos a qualquer momento:
 
-Proximo. Vai para o proximo documento.
+Alexa, para. Isso pausa a reproducao.
+Alexa, continua. Retoma de onde parou.
+Alexa, proximo. Vai para o proximo capitulo ou musica.
+Alexa, anterior. Volta ao capitulo ou musica anterior.
 
-Anterior. Volta ao documento anterior.
+Importante: durante a reproducao de audio, a Alexa esta em modo de escuta diferente.
+Por isso, sempre comece com Alexa antes do comando.
 
-Mais devagar. Reduz a velocidade de leitura.
+## Secao 6: Ajuda a Qualquer Momento
 
-Mais rapido. Aumenta a velocidade de leitura.
+Se voce se perder, diga: ajuda.
+A Alexa explica como navegar: dizer o numero do menu, repetir, voltar, ou continuar.
 
-## Secao 6: Quando Der Problema
+## Secao 7: Quando Algo Der Errado
 
-Problema numero um: a Alexa tocou musica em vez de obedecer.
+Problema um: a Alexa nao entendeu o que voce disse.
+Espere dois segundos e repita mais devagar, em uma frase so.
+Se continuar sem entender, diga: Alexa, cancela. E recomece.
+
+Problema dois: a Alexa ficou em silencio.
+Diga: Alexa, cancela.
+Aguarde o som de confirmacao.
+Depois abra de novo: Alexa, abrir meus audiobooks.
+
+Problema tres: a Alexa tocou musica da loja em vez de obedecer.
 Diga: Alexa, para.
 Espere tres segundos.
-Tente de novo, falando mais devagar e sem pausas no meio da frase.
+Tente de novo, falando mais devagar.
 
-Problema numero dois: a Alexa nao entendeu.
-Espere dois segundos apos dizer Alexa.
-Fale a frase completa de uma vez, sem pausas.
-Se ainda nao funcionar, diga: Alexa, cancela. E recomece.
-
-Problema numero tres: a Alexa ficou em silencio.
-Diga: Alexa, cancela.
-Aguarde o sinal sonoro.
-Recomece do inicio.
-
-Dica de ouro: fale as frases completas e devagar,
-sem pausas no meio do comando.
+Dica: fale as frases completas, sem pausas no meio do comando.
 
 ## Encerramento
 
-Voce tem este guia sempre disponivel.
-A qualquer momento diga: Alexa, le meu guia de operacao,
-para ouvir tudo de novo.
-
-Bom uso da sua biblioteca de audio!
+Este guia esta sempre disponivel na sua biblioteca.
+Quando precisar, e so ouvir de novo.
+Bom uso da sua Super Alexa!

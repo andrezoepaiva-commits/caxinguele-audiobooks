@@ -47,21 +47,26 @@
             "o que tem",
             "repete a lista",
             "repete",
-            "voltar",
-            "voltar ao menu",
-            "menu principal",
-            "inicio",
+            "repetir",
             "categorias",
             "quais categorias tenho",
-            "retomar",
-            "voltar atras",
-            "sair",
-            "menu",
             "quais menus tenho",
             "lista de menus",
             "repetir opcoes",
             "ouca novamente",
             "diga novamente"
+          ]
+        },
+        {
+          "name": "VoltarIntent",
+          "slots": [],
+          "samples": [
+            "voltar",
+            "voltar ao menu",
+            "menu principal",
+            "menu",
+            "inicio",
+            "voltar atras"
           ]
         },
         {
@@ -230,6 +235,29 @@
           ]
         },
         {
+          "name": "PesquisarYoutubeIntent",
+          "slots": [
+            {
+              "name": "termo_pesquisa",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "pesquisa {termo_pesquisa}",
+            "pesquisar {termo_pesquisa}",
+            "procura {termo_pesquisa}",
+            "procurar {termo_pesquisa}",
+            "busca {termo_pesquisa}",
+            "buscar {termo_pesquisa}",
+            "video {termo_pesquisa}",
+            "youtube {termo_pesquisa}",
+            "achar video {termo_pesquisa}",
+            "encontra video {termo_pesquisa}",
+            "pesquisa video {termo_pesquisa}",
+            "pesquisar no youtube {termo_pesquisa}"
+          ]
+        },
+        {
           "name": "AMAZON.HelpIntent",
           "samples": []
         },
@@ -238,15 +266,12 @@
           "slots": [],
           "samples": [
             "opcoes",
-            "opções",
             "que opcoes tenho",
-            "quais opções",
             "quais opcoes",
             "o que posso falar",
             "o que tem aqui",
             "o que eu posso fazer",
             "minhas opcoes",
-            "minhas opções",
             "onde estou",
             "me lembre as opcoes"
           ]

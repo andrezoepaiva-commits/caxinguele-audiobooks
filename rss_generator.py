@@ -7,6 +7,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from datetime import datetime
 from typing import List, Dict
+import re
 
 # URL base do GitHub Pages
 GITHUB_USER = "andrezoepaiva-commits"
@@ -94,16 +95,18 @@ def gerar_rss_livro(
         nome_cap = resultado.get("nome", f"Capitulo {i:02d}")
         # Remove extensao .mp3 do titulo
         titulo_cap = nome_cap.replace(".mp3", "").strip()
-        # Remove o "- Cap XX -" do inicio para ficar mais limpo
+        # Remove prefixo "NomeLivro - Cap XX - " para deixar so o conteudo
         if " - " in titulo_cap:
             partes = titulo_cap.split(" - ", 2)
             if len(partes) >= 3:
                 titulo_cap = partes[2].strip()
+        # Remove "Cap NN - " residual se ficou no inicio
+        titulo_cap = re.sub(r"^Cap(?:itulo|ítulo)?\s*\d+\s*[-–]\s*", "", titulo_cap, flags=re.IGNORECASE)
 
         url_audio = resultado.get("direct_url", resultado.get("url", ""))
 
         item = ET.SubElement(channel, "item")
-        ET.SubElement(item, "title").text = f"{i:02d}. {titulo_cap}"
+        ET.SubElement(item, "title").text = f"{nome_livro} - Cap {i:02d} - {titulo_cap}"
         ET.SubElement(item, "description").text = f"Capitulo {i} de {nome_livro}"
         ET.SubElement(item, "guid").text = f"{nome_livro}-cap{i:02d}"
         ET.SubElement(item, "pubDate").text = datetime.now().strftime("%a, %d %b %Y %H:%M:%S +0000")

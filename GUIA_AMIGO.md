@@ -9,7 +9,8 @@ Diga: **"Alexa, abre meus audiobooks"**
 |---|---|
 | **"opções"** ou **"ajuda"** | Re-lê o menu/lista de onde você está |
 | **"pausa"** | Para o áudio |
-| **"continuar"** | Retoma de onde parou |
+| **"continuar"** | Retoma de onde parou (logo após pausar, com a skill aberta) |
+| **"Alexa, continue meus audiobooks"** | Retoma de onde parou — funciona depois de horas, dias ou semanas |
 | **"voltar"** | Volta pro menu anterior |
 
 ## Dicas rápidas

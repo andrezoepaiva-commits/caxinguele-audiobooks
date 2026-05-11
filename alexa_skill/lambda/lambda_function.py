@@ -17,7 +17,9 @@
 
 import json
 import logging
+import os
 import re
+import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
@@ -52,6 +54,17 @@ MENU_DEFAULT = [
 # Numeros especiais reservados para navegacao
 NUM_REPETIR = 98
 NUM_VOLTAR  = 99
+
+# Fala do Menu 7 YouTube — unificada em 1 lugar pra evitar drift entre 3 caminhos
+# (entrada via _menu_principal_dispatcher, NUM_REPETIR no submenu, _reconstruir_menu)
+FALA_MENU_7_YOUTUBE = (
+      "YouTube e Videos. "
+      "Dica importante: voce pode dizer 'pesquisa' seguido do que quer ouvir a qualquer momento, "
+      "sem precisar entrar nesse menu. Por exemplo: pesquisa entrevista helen keller. "
+      "Opcoes aqui: 1 para Ultimas Atualizacoes YT. "
+      "2 para instrucoes de Pesquisar. 3 para Meus Canais. "
+      "Diga repetir ou voltar."
+)
 
 # DynamoDB para persistencia de capitulo entre sessoes
 DYNAMODB_TABLE           = "caxinguele_progresso"
@@ -126,31 +139,16 @@ def handle_launch(event):
           _salvar_flag(user_id, "onboarding_feito", True)
           session["onboarding_feito"] = "true"
 
-      prefixo_retomar = ""
-      if progresso:
-          try:
-              # Pega o livro mais RECENTE pelo timestamp (nao o de maior cap_idx)
-              ultimo_livro = max(progresso, key=lambda k: progresso[k].get("ts", ""))
-              cap_idx = int(progresso[ultimo_livro].get("cap_idx", 0))
-              livros = _agrupar_livros(documentos)
-              livro = next((l for l in livros if l["livro_base"] == ultimo_livro), None)
-              if livro and livro.get("capitulos"):
-                  total_caps = len(livro["capitulos"])
-                  nome_livro = livro["titulo"]
-                  prefixo_retomar = (
-                      f"Bem vindo de volta. Voce estava ouvindo {nome_livro}, "
-                      f"capitulo {cap_idx + 1} de {total_caps}. "
-                      "Diga continuar para retomar. Ou escolha um menu. "
-                  )
-          except Exception as e:
-              logger.info(f"Sem progresso para retomar: {e}")
-
+      # S248 REDESIGN UX: abertura SEMPRE menu top-level (sem prefixo_retomar).
+      # Retomar agora vive DENTRO do menu Livros (_menu_livros_categorias) como atalho verbal.
+      # Razao: consistencia cognitiva pra cego — sempre abre no mesmo lugar.
+      # Atalho "Alexa, continue meus audiobooks" (AMAZON.ResumeIntent) continua funcionando direto.
       texto_menu = _enumerar_menu_principal(menu, documentos)
-      texto = prefixo_onboarding + prefixo_retomar + texto_menu
+      texto = prefixo_onboarding + texto_menu
 
       _registrar_uso("_abertura", "launch", len(documentos))
-      # Reprompt = menu inteiro: se silencio (~8s), Alexa repete todas opcoes automaticamente
-      reprompt = ("Diga continuar para retomar, ou escolha. " + texto_menu) if progresso else texto_menu
+      # Reprompt = menu inteiro (silencio ~8s repete tudo)
+      reprompt = texto_menu
       return _resp(texto, end=False, reprompt=reprompt, session=session)
 
 
@@ -226,7 +224,18 @@ def handle_intent(event):
                   end=False, session=session)
       if intent_name in ("AMAZON.HelpIntent", "OpcoesIntent"):
           return _handle_ajuda(session)
-      if intent_name in ("ListarDocumentosIntent", "AMAZON.NavigateHomeIntent"):
+      # S248: separacao semantica — "repetir" re-le estado atual; "voltar" sobe nivel.
+      # ListarDocumentosIntent agora cobre APENAS samples de re-leitura ("repete", "repetir", "diga novamente"...).
+      # VoltarIntent (novo) cobre APENAS samples de navegacao ("voltar", "menu principal"...).
+      if intent_name == "ListarDocumentosIntent":
+          # S248 cont v2: se aguardando escolha YT, repete pagina atual; senao state-aware geral
+          if session.get("yt_aguardando") == "true":
+              return _handle_repetir_yt(session)
+          return _handle_ajuda(session)
+      if intent_name in ("VoltarIntent", "AMAZON.NavigateHomeIntent"):
+          # S248 cont v2: voltar durante escolha YT limpa estado especifico
+          if session.get("yt_aguardando") == "true":
+              return _handle_voltar_yt(session)
           return _voltar_nivel_anterior(session)
 
       # Pular/voltar capitulo por voz durante leitura
@@ -244,6 +253,9 @@ def handle_intent(event):
           if numero is None:
               return _resp("Nao entendi o numero. Diga por exemplo: numero nove.",
                             end=False, session=session)
+          # S248 cont: se amigo esta escolhendo entre top 3 do YouTube, intercepta antes do roteador
+          if session.get("yt_aguardando") == "true":
+              return _handle_escolher_yt(numero, session)
           return _roteador_numero(numero, session)
 
       # Atalhos de voz
@@ -253,9 +265,14 @@ def handle_intent(event):
           return _handle_novidades(session)
       if intent_name == "LerDocumentoIntent":
           return _handle_ler_documento(slots, session)
+      if intent_name == "PesquisarYoutubeIntent":
+          return _handle_pesquisar_youtube(slots, session)
 
       # Paginacao da lista de livros
       if intent_name == "PaginaProximaIntent":
+          # S248 cont v2: paginacao de YouTube tem prioridade
+          if session.get("yt_aguardando") == "true":
+              return _handle_proxima_pagina_yt(session)
           if session.get("menu_tipo") == "livros":
               pagina = int(session.get("pagina_livros", "1"))
               # F4 fix: detectar fim da lista antes de tentar avancar
@@ -275,6 +292,9 @@ def handle_intent(event):
               return _render_pagina_livros(new_session, mostrar_ja_lidos=mostrar)
           return _resp("Diga proximos so na lista de livros.", end=False, session=session)
       if intent_name == "PaginaAnteriorIntent":
+          # S248 cont v2: paginacao reversa do YouTube tem prioridade
+          if session.get("yt_aguardando") == "true":
+              return _handle_anterior_pagina_yt(session)
           if session.get("menu_tipo") == "livros":
               pagina = int(session.get("pagina_livros", "1"))
               new_session = {**session, "pagina_livros": str(max(1, pagina - 1))}
@@ -447,11 +467,8 @@ def _selecionar_menu(numero, session):
 
       # ---------- Menu 7: YouTube e Videos ----------
       if tipo == "youtube":
-          opcoes = cat.get("opcoes", [])
-          partes = [f"{o['numero']} para {o['nome']}" for o in opcoes]
           return _resp(
-              f"{nome}. {', '.join(partes)}. "
-              "Diga repetir ou voltar.",
+              FALA_MENU_7_YOUTUBE,
               end=False,
               session={**session, "nivel": "submenu", "menu_tipo": "youtube"})
 
@@ -510,7 +527,13 @@ def _carregar_progresso(user_id):
           progresso = {}
           for livro, valor in bruto.items():
               if isinstance(valor, dict):
-                  progresso[livro] = valor
+                  # FIX S248: DynamoDB retorna numbers como Decimal — converter pra int explicitamente
+                  # senao json.dumps explode em handle_launch:111.
+                  progresso[livro] = {
+                      "cap_idx":   int(valor.get("cap_idx", 0)),
+                      "offset_ms": int(valor.get("offset_ms", 0)),
+                      "ts":        str(valor.get("ts", "")),
+                  }
               else:
                   # Migracao on-read: legado (int) -> dict
                   progresso[livro] = {"cap_idx": int(valor), "offset_ms": 0, "ts": ""}
@@ -933,7 +956,9 @@ def _render_pagina_livros(session, mostrar_ja_lidos=False):
           tot = len(visiveis)
           plural = "s" if tot > 1 else ""
           rotulo = "ja ouvidos" if mostrar_ja_lidos else "para ouvir"
-          cabecalho = f"Voce tem {tot} livro{plural} {rotulo}. "
+          # S248: prefixo_continuar (atalho de retomar) aparece SO na pagina 1
+          prefixo_cont = session.get("prefixo_continuar", "")
+          cabecalho = prefixo_cont + f"Voce tem {tot} livro{plural} {rotulo}. "
       if total_paginas > 1:
           cabecalho += f"Pagina {pagina} de {total_paginas}. "
 
@@ -1345,15 +1370,40 @@ LIVROS_CATEGORIAS = [
 
 
 def _menu_livros_categorias(session):
-      """Submenu de categorias de livros. Se só 1 categoria, pula direto para lista."""
+      """Submenu de categorias de livros. Se só 1 categoria, pula direto para lista.
+      S248 REDESIGN UX: oferece atalho verbal 'continuar' quando ha progresso —
+      retomar agora vive aqui (nao na abertura). Razao: consistencia cognitiva pro cego.
+      """
+      # Atalho continuar: se ha progresso, anuncia o ultimo livro antes das categorias
+      prefixo_continuar = ""
+      progresso = _obter_json(session, "progresso") or {}
+      if progresso:
+          try:
+              ultimo_livro = max(progresso, key=lambda k: progresso[k].get("ts", ""))
+              cap_idx = int(progresso[ultimo_livro].get("cap_idx", 0))
+              todos_docs = _obter_json(session, "todos_docs") or []
+              livros = _agrupar_livros(todos_docs)
+              livro = next((l for l in livros if l["livro_base"] == ultimo_livro), None)
+              if livro and livro.get("capitulos"):
+                  total_caps = len(livro["capitulos"])
+                  nome_livro = livro["titulo"]
+                  prefixo_continuar = (
+                      f"Voce estava ouvindo {nome_livro}, capitulo {cap_idx + 1} de {total_caps}. "
+                      "Diga continuar para retomar. Ou escolha uma categoria. "
+                  )
+          except Exception as e:
+              logger.info(f"Sem progresso para retomar em livros: {e}")
+
       if len(LIVROS_CATEGORIAS) == 1:
           cat = LIVROS_CATEGORIAS[0]
           todos_docs = _obter_json(session, "todos_docs") or []
           docs_livros = [d for d in todos_docs if d.get("categoria", "") == cat["filtro"]]
-          return _menu_livros(docs_livros, session, categoria_nome=cat["nome"])
+          # S248: passa prefixo_continuar adiante (path com 1 categoria)
+          return _menu_livros(docs_livros, session, categoria_nome=cat["nome"], prefixo_continuar=prefixo_continuar)
       partes = [f"{cat['numero']} para Livros {cat['nome']}" for cat in LIVROS_CATEGORIAS]
       texto = (
-          "Livros. Escolha a categoria. "
+          "Livros. " + prefixo_continuar +
+          (f"Escolha a categoria. " if not prefixo_continuar else "") +
           f"{'. '.join(partes)}. "
           "Diga repetir ou voltar ao menu."
       )
@@ -1365,8 +1415,10 @@ def _menu_livros_categorias(session):
       return _resp(texto, end=False, reprompt="Diga o numero da categoria.", session=new_session)
 
 
-def _menu_livros(docs_brutos, session, categoria_nome=""):
-      """Lista livros agrupados, paginados 5 por vez, ordenados por status (em progresso → nunca → ja lidos escondidos)."""
+def _menu_livros(docs_brutos, session, categoria_nome="", prefixo_continuar=""):
+      """Lista livros agrupados, paginados 5 por vez, ordenados por status (em progresso → nunca → ja lidos escondidos).
+      S248: aceita prefixo_continuar pra anunciar atalho de retomar antes da lista (passado por _menu_livros_categorias).
+      """
       livros = _agrupar_livros(docs_brutos)
       if not livros:
           return _resp(
@@ -1379,6 +1431,7 @@ def _menu_livros(docs_brutos, session, categoria_nome=""):
           "livros_categoria":  categoria_nome,
           "pagina_livros":     "1",
           "mostrar_ja_lidos":  "false",
+          "prefixo_continuar": prefixo_continuar,  # S248: propaga p/ _render_pagina_livros
       }
       return _render_pagina_livros(new_session, mostrar_ja_lidos=False)
 
@@ -1873,11 +1926,7 @@ def _selecionar_submenu(numero, session):
       # ---------- YouTube: submenu ----------
       if menu_tipo == "youtube":
           if numero == NUM_REPETIR:
-              return _resp(
-                  "YouTube e Videos. 1 para Ultimas Atualizacoes YT. "
-                  "2 para Pesquisar no YouTube. 3 para Meus Canais. "
-                  "Diga repetir ou voltar.",
-                  end=False, session=session)
+              return _resp(FALA_MENU_7_YOUTUBE, end=False, session=session)
           if numero == NUM_VOLTAR:
               return _voltar_menu_principal(session)
           if numero == 1:
@@ -1887,8 +1936,10 @@ def _selecionar_submenu(numero, session):
                   end=False, session=session)
           if numero == 2:
               return _resp(
-                  "Pesquisa no YouTube ainda nao disponivel. "
-                  "Diga outro numero ou diga voltar.",
+                  "Pra pesquisar, diga: pesquisa, e depois o que quer ouvir. "
+                  "Por exemplo: pesquisa entrevista helen keller. "
+                  "Isso funciona em qualquer momento, voce nao precisa entrar nesse menu antes. "
+                  "Depois de eu achar, toque no atalho de video do celular.",
                   end=False, session=session)
           if numero == 3:
               return _resp(
@@ -2240,7 +2291,53 @@ _PARENT_MENU = {
 
 # Funcoes que reconstroem cada menu (usadas pelo voltar hierarquico)
 def _reconstruir_menu(menu_tipo, session):
-      """Reconstroi o menu do tipo especificado para voltar um nivel."""
+      """Reconstroi o menu do tipo especificado para voltar um nivel.
+      State-aware (S248): 3 buracos fechados — livro selecionado, livros_capitulos, reuniao selecionada.
+      Quando o amigo fala 'opcoes' nesses 3 estados, re-le as opcoes daquele ponto especifico.
+      """
+      nivel = session.get("nivel", "menu")
+
+      # Buraco 1 (S248): Livro selecionado (nivel=item) — re-le os 4 modos do livro
+      if menu_tipo == "livros" and nivel == "item":
+          titulo = session.get("livro_titulo", "?")
+          livro_base = session.get("livro_base", "")
+          progresso = _obter_json(session, "progresso") or {}
+          cap_data = progresso.get(livro_base, None)
+          cap_salvo = cap_data.get("cap_idx") if isinstance(cap_data, dict) else cap_data
+          opcao_continuar = f"2 para Continuar do Capitulo {cap_salvo + 1}. " if (cap_salvo is not None and cap_salvo > 0) else ""
+          return _resp(
+              f"{titulo}. 1 para Comecar do Inicio. {opcao_continuar}"
+              "3 para Escolher Capitulo. 4 para Sinopse. "
+              "Diga repetir ou voltar.",
+              end=False, session=session)
+
+      # Buraco 2 (S248): Lista de capitulos (livros_capitulos) — re-le todos capitulos
+      if menu_tipo == "livros_capitulos":
+          titulo = session.get("livro_titulo", "?")
+          capitulos = _obter_json(session, "capitulos_livro") or []
+          if capitulos:
+              partes = [f"{i}. {_titulo_curto(cap.get('titulo', f'Capitulo {i}'))}" for i, cap in enumerate(capitulos, 1)]
+              texto = (
+                  f"{titulo}. {len(capitulos)} capitulos. "
+                  f"{'. '.join(partes)}. "
+                  "Diga repetir ou voltar. "
+                  "Qual capitulo quer ouvir?"
+              )
+              return _resp(texto, end=False, session=session)
+          return _voltar_menu_principal(session)
+
+      # Buraco 3 (S248): Reuniao selecionada (nivel=item) — re-le os 3 modos
+      if menu_tipo == "reunioes" and nivel == "item":
+          reu = _obter_json(session, "item_dados") or {}
+          titulo_reu = reu.get('titulo', '?')
+          return _resp(
+              f"Reuniao: {titulo_reu}. Como quer ouvir? "
+              "1 para Resumo em Topicos Frasais. "
+              "2 para Resumo Pragmatico. "
+              "3 para Audio na Integra. "
+              "Diga repetir ou voltar.",
+              end=False, session=session)
+
       if menu_tipo == "livros_categorias":
           return _menu_livros_categorias(session)
       if menu_tipo == "livros":
@@ -2273,6 +2370,9 @@ def _reconstruir_menu(menu_tipo, session):
           return _menu_listas(session)
       if menu_tipo == "listas_itens":
           return _menu_listas(session)
+      # S248 cont v2: Menu 7 YouTube re-le dica + opcoes (fala centralizada em FALA_MENU_7_YOUTUBE)
+      if menu_tipo == "youtube":
+          return _resp(FALA_MENU_7_YOUTUBE, end=False, session=session)
       # Fallback
       return _voltar_menu_principal(session)
 
@@ -2368,10 +2468,262 @@ def _handle_ler_documento(slots, session):
       return _resp(f"{titulo} sem audio. Escolha outro ou diga voltar.", end=False, session=session)
 
 
+def _parse_iso_duration_secs(iso):
+      """ISO 8601 (PT1H23M45S) -> segundos. PT0S = 0."""
+      m = re.match(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", iso or "")
+      if not m:
+          return 0
+      h, mi, s = (int(x or 0) for x in m.groups())
+      return h * 3600 + mi * 60 + s
+
+
+def _yt_busca_e_filtra(termo, api_key, n_search, min_secs):
+      """Busca YouTube e retorna lista de videos COM duracao >= min_secs.
+      n_search = quantos pedir na search.list (6 default, 12 fallback).
+      Retorna lista de dicts {video_id, titulo, canal, dur_secs}.
+      """
+      params = {
+          "part": "snippet", "q": termo, "type": "video",
+          "maxResults": n_search,
+          "relevanceLanguage": "pt", "regionCode": "BR",
+          "key": api_key,
+      }
+      url = "https://www.googleapis.com/youtube/v3/search?" + urllib.parse.urlencode(params)
+      with urllib.request.urlopen(url, timeout=8) as r:
+          data = json.loads(r.read())
+      items = data.get("items", [])
+      if not items:
+          return []
+      ids = [it["id"]["videoId"] for it in items]
+      params2 = {"part": "contentDetails,snippet", "id": ",".join(ids), "key": api_key}
+      url2 = "https://www.googleapis.com/youtube/v3/videos?" + urllib.parse.urlencode(params2)
+      with urllib.request.urlopen(url2, timeout=8) as r:
+          data2 = json.loads(r.read())
+      resultados = []
+      for v in data2.get("items", []):
+          dur = _parse_iso_duration_secs(v["contentDetails"]["duration"])
+          if dur < min_secs:
+              continue
+          resultados.append({
+              "video_id": v["id"],
+              "titulo": v["snippet"]["title"],
+              "canal": v["snippet"]["channelTitle"],
+              "dur_secs": dur,
+          })
+      return resultados
+
+
+def _fala_duracao(secs):
+      """Converte segundos em fala humana: 'uma hora e doze minutos', '32 minutos', '45 segundos'."""
+      if secs >= 3600:
+          h = secs // 3600
+          mi = (secs % 3600) // 60
+          if mi == 0:
+              return f"{h} hora{'s' if h>1 else ''}"
+          return f"{h} hora{'s' if h>1 else ''} e {mi} minuto{'s' if mi>1 else ''}"
+      if secs >= 60:
+          mi = secs // 60
+          return f"{mi} minuto{'s' if mi>1 else ''}"
+      return f"{secs} segundo{'s' if secs>1 else ''}"
+
+
+def _render_pagina_yt(uteis, pagina, termo):
+      """Renderiza a fala de uma pagina (3 videos) da lista paginada de YouTube.
+      uteis: lista completa de dicts {video_id, titulo, canal, dur_secs}
+      pagina: 0-indexed (0 = videos 1-3, 1 = videos 4-6, etc.)
+      Retorna (fala, tem_mais).
+      """
+      por_pagina = 3
+      total = len(uteis)
+      ini = pagina * por_pagina
+      fim = min(ini + por_pagina, total)
+      bloco = uteis[ini:fim]
+      n_bloco = len(bloco)
+
+      partes = []
+      for i, v in enumerate(bloco, 1):
+          tit_curto = _titulo_curto(v["titulo"])
+          canal = v["canal"][:40]
+          dur = _fala_duracao(int(v.get("dur_secs", 0)))
+          partes.append(f"{i}, de {dur}: {tit_curto}, canal {canal}.")
+
+      tem_mais = fim < total
+
+      if pagina == 0:
+          if total == 1:
+              cab = f"Achei 1 video sobre {termo}."
+              suf = "Diga 'um' pra escutar ou pesquise outro termo."
+          else:
+              cab = f"Achei {total} videos sobre {termo}. Vou ler 3 por vez."
+              if tem_mais:
+                  suf = "Diga o numero, ou diga 'proximo' pra mais 3, ou 'voltar' pra sair."
+              else:
+                  suf = "Diga o numero, ou 'voltar' pra sair."
+      else:
+          cab = f"Pagina {pagina+1}."
+          if tem_mais:
+              suf = "Diga o numero, 'proximo' pra mais, 'anterior' pra voltar uma pagina, 'repete' pra ouvir de novo, ou 'voltar' pra sair."
+          else:
+              suf = "Ultima pagina. Diga o numero, 'anterior' pra voltar uma pagina, 'repete' pra ouvir de novo, ou 'voltar' pra sair."
+
+      fala = cab + " " + " ".join(partes) + " " + suf
+      return fala, tem_mais
+
+
+def _handle_pesquisar_youtube(slots, session):
+      """S248 cont (v2 paginado): pesquisa YouTube pura + filtro anti-Short + paginacao 3 em 3.
+      Estrategia: 1 chamada de API pega ate 30 resultados, paginar localmente sem custar quota extra.
+      """
+      termo = _extrair_texto(slots, "termo_pesquisa")
+      if not termo:
+          return _resp(
+              "Diga o que quer pesquisar. Por exemplo, pesquisa entrevista drauzio.",
+              end=False, session=session)
+
+      api_key = os.environ.get("YOUTUBE_API_KEY", "")
+      bucket = os.environ.get("S3_BUCKET_YT", "")
+      if not api_key or not bucket:
+          logger.error("PesquisarYoutube: env vars faltando")
+          return _resp("Erro de configuracao. Avise o Andre.", end=False, session=session)
+
+      MIN_SECS = 60
+      # 1 chamada pegando ate 30 (mesma quota de pegar 3)
+      try:
+          uteis = _yt_busca_e_filtra(termo, api_key, n_search=30, min_secs=MIN_SECS)
+      except Exception as e:
+          logger.warning(f"PesquisarYoutube erro: {e}")
+          return _resp("Nao consegui pesquisar agora. Tente de novo.", end=False, session=session)
+
+      if not uteis:
+          return _resp(
+              f"Nao achei video longo sobre {termo}. Tente outro termo.",
+              end=False, session=session)
+
+      logger.info(f"PesquisarYoutube ok: termo='{termo}' -> {len(uteis)} uteis (paginado)")
+
+      # Salva lista completa + pagina 0 + termo
+      fala, _ = _render_pagina_yt(uteis, 0, termo)
+      uteis_lite = [{"video_id": v["video_id"], "titulo": v["titulo"], "canal": v["canal"], "dur_secs": v["dur_secs"]} for v in uteis]
+      nova_session = {
+          **session,
+          "yt_uteis": json.dumps(uteis_lite),
+          "yt_pagina": "0",
+          "yt_aguardando": "true",
+          "yt_termo": termo,
+      }
+      return _resp(fala, end=False, session=nova_session)
+
+
+def _handle_escolher_yt(numero, session):
+      """S248 cont (v2 paginado): amigo escolheu numero 1/2/3 da pagina atual.
+      Calcula index real baseado na pagina + atualiza S3.
+      """
+      try:
+          uteis = json.loads(session.get("yt_uteis", "[]"))
+      except Exception:
+          uteis = []
+      if not uteis:
+          return _roteador_numero(numero, _limpar_estado_yt(session))
+
+      pagina = int(session.get("yt_pagina", "0"))
+      idx = pagina * 3 + (numero - 1)
+      if idx < 0 or idx >= len(uteis):
+          return _resp(
+              f"Diga 1, 2 ou 3 (numeros da pagina atual).",
+              end=False, session=session)
+
+      escolhido = uteis[idx]
+      bucket = os.environ.get("S3_BUCKET_YT", "")
+      try:
+          s3 = boto3.client("s3")
+          payload = {
+              "video_id": escolhido["video_id"],
+              "titulo": escolhido["titulo"],
+              "canal": escolhido["canal"],
+              "termo": session.get("yt_termo", ""),
+              "ts": datetime.utcnow().isoformat() + "Z",
+          }
+          s3.put_object(
+              Bucket=bucket, Key="ultimo-video.json",
+              Body=json.dumps(payload, ensure_ascii=False),
+              ContentType="application/json",
+              CacheControl="no-cache, no-store, max-age=0",
+          )
+          logger.info(f"EscolherYT: pagina={pagina} numero={numero} idx={idx} -> {escolhido['video_id']}")
+      except Exception as e:
+          logger.warning(f"EscolherYT erro S3: {e}")
+          return _resp("Achei mas nao consegui salvar. Tente de novo.", end=False, session=session)
+
+      return _resp(
+          "Toque no atalho de video do celular pra ouvir.",
+          end=False, session=_limpar_estado_yt(session))
+
+
+def _limpar_estado_yt(session):
+      """Reseta atributos de pesquisa YouTube na sessao."""
+      return {**session, "yt_aguardando": "false", "yt_uteis": "", "yt_pagina": "0", "yt_termo": ""}
+
+
+def _handle_proxima_pagina_yt(session):
+      """'Proximo' / 'mais 3' -> avanca pagina dentro do estado YT."""
+      try:
+          uteis = json.loads(session.get("yt_uteis", "[]"))
+      except Exception:
+          uteis = []
+      if not uteis:
+          return _resp("Nao tem pesquisa ativa. Diga 'pesquisa' seguido do termo.",
+                       end=False, session=_limpar_estado_yt(session))
+      pagina = int(session.get("yt_pagina", "0")) + 1
+      por_pagina = 3
+      if pagina * por_pagina >= len(uteis):
+          return _resp(
+              "Esses sao todos os videos. Diga o numero pra escolher, 'repete', ou pesquise outro termo.",
+              end=False, session=session)
+      fala, _ = _render_pagina_yt(uteis, pagina, session.get("yt_termo", ""))
+      return _resp(fala, end=False, session={**session, "yt_pagina": str(pagina)})
+
+
+def _handle_anterior_pagina_yt(session):
+      """'Anterior' / 'pagina anterior' -> volta uma pagina dentro do estado YT."""
+      try:
+          uteis = json.loads(session.get("yt_uteis", "[]"))
+      except Exception:
+          uteis = []
+      if not uteis:
+          return _resp("Nao tem pesquisa ativa. Diga 'pesquisa' seguido do termo.",
+                       end=False, session=_limpar_estado_yt(session))
+      pagina = int(session.get("yt_pagina", "0"))
+      if pagina == 0:
+          return _resp(
+              "Voce ja esta na primeira pagina. Diga 'proximo' pra avancar, ou 'repete' pra ouvir de novo.",
+              end=False, session=session)
+      nova_pagina = pagina - 1
+      fala, _ = _render_pagina_yt(uteis, nova_pagina, session.get("yt_termo", ""))
+      return _resp(fala, end=False, session={**session, "yt_pagina": str(nova_pagina)})
+
+
+def _handle_repetir_yt(session):
+      """'Repete' / 'repetir' -> re-le a pagina atual."""
+      try:
+          uteis = json.loads(session.get("yt_uteis", "[]"))
+      except Exception:
+          uteis = []
+      if not uteis:
+          return _handle_ajuda(session)
+      pagina = int(session.get("yt_pagina", "0"))
+      fala, _ = _render_pagina_yt(uteis, pagina, session.get("yt_termo", ""))
+      return _resp(fala, end=False, session=session)
+
+
+def _handle_voltar_yt(session):
+      """'Voltar' durante escolha YT -> limpa estado e volta nivel anterior."""
+      return _voltar_nivel_anterior(_limpar_estado_yt(session))
+
+
 def _handle_ajuda(session):
-      """P2f (S246): ajuda contextual — re-apresenta o menu/lista do estado atual.
-      Cobre 11 estados via _reconstruir_menu. Buracos conhecidos (arestas futuras):
-      nivel=item livros (livro selecionado), livros_capitulos, nivel=item reunioes.
+      """P2f (S246, expandido S248): ajuda contextual state-aware — re-apresenta as opcoes do estado atual.
+      Cobre 14 estados via _reconstruir_menu. S248 fechou 3 buracos:
+      nivel=item livros (4 modos do livro), livros_capitulos (lista capitulos), nivel=item reunioes (3 modos).
       """
       menu_tipo = session.get("menu_tipo", "")
       nivel = session.get("nivel", "menu")
