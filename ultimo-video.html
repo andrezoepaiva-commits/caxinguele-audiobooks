@@ -3,15 +3,39 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="refresh" content="0; url=https://www.youtube.com/watch?v=jNQXAC9IVRw">
 <title>Caxinguele - Abrindo video</title>
 </head>
-<body style="font-family: sans-serif; padding: 20px; text-align: center;">
-<h1>Abrindo video no YouTube...</h1>
-<p>Se nao abrir automaticamente em 2 segundos:</p>
-<p><a href="https://www.youtube.com/watch?v=jNQXAC9IVRw" style="font-size: 20px;">Toque aqui para abrir</a></p>
+<body style="font-family: sans-serif; padding: 20px; text-align: center; max-width: 600px; margin: 0 auto;">
+<h1 id="msg">Abrindo video em <span id="cnt">3</span>s...</h1>
+<p><a href="https://www.youtube.com/watch?v=jNQXAC9IVRw" id="link" style="font-size: 24px; display: inline-block; padding: 15px; background: #ff0000; color: white; text-decoration: none; border-radius: 8px; margin: 10px;">Tocar pra abrir agora</a></p>
+<hr style="margin: 30px 0;">
+<p style="color: #666; font-size: 14px;">So pra configuracao:</p>
+<p><button id="stop" style="font-size: 16px; padding: 12px 20px; background: #f0f0f0; border: 1px solid #999; border-radius: 6px;">PARAR redirect (modo configuracao do atalho)</button></p>
 <script>
-window.location.href = "https://www.youtube.com/watch?v=jNQXAC9IVRw";
+let segundos = 3;
+let timer;
+let parado = false;
+
+function tick() {
+  if (parado) return;
+  segundos--;
+  var el = document.getElementById('cnt');
+  if (el) el.innerText = segundos;
+  if (segundos <= 0) {
+    window.location.href = "https://www.youtube.com/watch?v=jNQXAC9IVRw";
+  } else {
+    timer = setTimeout(tick, 1000);
+  }
+}
+
+document.getElementById('stop').addEventListener('click', function() {
+  parado = true;
+  clearTimeout(timer);
+  document.getElementById('msg').innerHTML = 'Redirect parado.<br><br>Agora: toque nos 3 pontos do Chrome (canto superior direito) e escolha <b>"Adicionar a tela inicial"</b>.';
+  this.style.display = 'none';
+});
+
+timer = setTimeout(tick, 1000);
 </script>
 </body>
 </html>
